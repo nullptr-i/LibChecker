@@ -10,7 +10,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Observer
 import com.absinthe.libchecker.R
-import com.absinthe.libchecker.constant.GlobalValues
+import com.absinthe.libchecker.constant.*
 import com.absinthe.libchecker.constant.librarymap.NativeLibMap
 import com.absinthe.libchecker.databinding.FragmentLibReferenceBinding
 import com.absinthe.libchecker.recyclerview.adapter.LibReferenceAdapter
@@ -21,9 +21,10 @@ import com.absinthe.libchecker.ui.main.EXTRA_TYPE
 import com.absinthe.libchecker.ui.main.LibReferenceActivity
 import com.absinthe.libchecker.utils.ActivityStackManager
 import com.absinthe.libchecker.utils.AntiShakeUtils
-import com.absinthe.libchecker.utils.TypeConverter
 import com.absinthe.libchecker.view.dialogfragment.LibDetailDialogFragment
 import com.absinthe.libchecker.viewmodel.AppViewModel
+import com.microsoft.appcenter.analytics.Analytics
+import com.microsoft.appcenter.analytics.EventProperties
 
 class LibReferenceFragment : BaseFragment<FragmentLibReferenceBinding>(R.layout.fragment_lib_reference), SearchView.OnQueryTextListener {
 
@@ -31,7 +32,9 @@ class LibReferenceFragment : BaseFragment<FragmentLibReferenceBinding>(R.layout.
     private val adapter = LibReferenceAdapter()
 
     private var isInit = false
-    private var category = LibReferenceActivity.Type.TYPE_NATIVE
+    private var isListInit = false
+    private var menu: Menu? = null
+    private var category = NATIVE
 
     override fun initBinding(view: View): FragmentLibReferenceBinding = FragmentLibReferenceBinding.bind(view)
 
@@ -64,8 +67,8 @@ class LibReferenceFragment : BaseFragment<FragmentLibReferenceBinding>(R.layout.
                         val ref = this@LibReferenceFragment.adapter.getItem(position)
                         val name = ref.libName
                         val regexName = NativeLibMap.findRegex(name)?.regexName
-                        LibDetailDialogFragment.newInstance(name, TypeConverter.libRefTypeToMode(ref.type), regexName)
-                            .apply {
+                        LibDetailDialogFragment.newInstance(name, ref.type, regexName)
+                                .apply {
                                 ActivityStackManager.topActivity?.apply {
                                     show(supportFragmentManager, tag)
                                 }
@@ -83,7 +86,12 @@ class LibReferenceFragment : BaseFragment<FragmentLibReferenceBinding>(R.layout.
             viewModel.apply {
                 libReference.observe(viewLifecycleOwner, Observer {
                     adapter.setList(it)
-                    binding.vfContainer.displayedChild = 1
+
+                    if (binding.vfContainer.displayedChild == 0) {
+                        binding.vfContainer.displayedChild = 1
+                    }
+                    isListInit = true
+                    menu?.findItem(R.id.search)?.isVisible = true
                 })
                 clickBottomItemFlag.observe(viewLifecycleOwner, Observer {
                     if (it) {
@@ -119,6 +127,7 @@ class LibReferenceFragment : BaseFragment<FragmentLibReferenceBinding>(R.layout.
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.lib_ref_menu, menu)
+        this.menu = menu
 
         val searchView = SearchView(requireContext()).apply {
             setIconifiedByDefault(false)
@@ -134,29 +143,34 @@ class LibReferenceFragment : BaseFragment<FragmentLibReferenceBinding>(R.layout.
         menu.findItem(R.id.search).apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW or MenuItem.SHOW_AS_ACTION_IF_ROOM)
             actionView = searchView
+
+            if (!isListInit) {
+                isVisible = false
+            }
         }
         super.onCreateOptionsMenu(menu, inflater)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.ref_category_all -> category = LibReferenceActivity.Type.TYPE_ALL
-            R.id.ref_category_native -> category = LibReferenceActivity.Type.TYPE_NATIVE
-            R.id.ref_category_service -> category = LibReferenceActivity.Type.TYPE_SERVICE
-            R.id.ref_category_activity -> category = LibReferenceActivity.Type.TYPE_ACTIVITY
-            R.id.ref_category_br -> category = LibReferenceActivity.Type.TYPE_BROADCAST_RECEIVER
-            R.id.ref_category_cp -> category = LibReferenceActivity.Type.TYPE_CONTENT_PROVIDER
+            R.id.ref_category_all -> category = ALL
+            R.id.ref_category_native -> category = NATIVE
+            R.id.ref_category_service -> category = SERVICE
+            R.id.ref_category_activity -> category = ACTIVITY
+            R.id.ref_category_br -> category = RECEIVER
+            R.id.ref_category_cp -> category = PROVIDER
         }
 
         if (item.itemId != R.id.search) {
             computeRef()
         }
+        Analytics.trackEvent(Constants.Event.LIB_REFERENCE_FILTER_TYPE, EventProperties().set("Type", category.toLong()))
         return super.onOptionsItemSelected(item)
     }
 
     private fun computeRef() {
         binding.vfContainer.displayedChild = 0
-        viewModel.computeLibReference(requireContext(), category)
+        viewModel.computeLibReference(category)
     }
 
     override fun onQueryTextSubmit(query: String?): Boolean {

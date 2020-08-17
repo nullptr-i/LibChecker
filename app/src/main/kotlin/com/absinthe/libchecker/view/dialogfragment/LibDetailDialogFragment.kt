@@ -3,19 +3,20 @@ package com.absinthe.libchecker.view.dialogfragment
 import android.app.Dialog
 import android.os.Bundle
 import android.text.method.LinkMovementMethod
+import androidx.appcompat.app.AlertDialog
 import androidx.core.text.HtmlCompat
 import androidx.core.view.isGone
+import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.api.ApiManager
 import com.absinthe.libchecker.constant.GlobalValues
+import com.absinthe.libchecker.constant.LibType
+import com.absinthe.libchecker.constant.NATIVE
 import com.absinthe.libchecker.constant.librarymap.BaseMap
-import com.absinthe.libchecker.recyclerview.adapter.LibStringAdapter
-import com.absinthe.libchecker.view.LCDialogFragment
 import com.absinthe.libchecker.view.detail.LibDetailView
 import com.absinthe.libchecker.viewmodel.DetailViewModel
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 const val EXTRA_LIB_NAME = "EXTRA_LIB_NAME"
 const val EXTRA_LIB_TYPE = "EXTRA_LIB_TYPE"
@@ -25,15 +26,11 @@ const val VF_CHILD_DETAIL = 0
 const val VF_CHILD_LOADING = 1
 const val VF_CHILD_FAILED = 2
 
-class LibDetailDialogFragment : LCDialogFragment() {
+class LibDetailDialogFragment : DialogFragment() {
 
-    private val dialogView by lazy {
-        LibDetailView(
-            requireContext()
-        )
-    }
+    private val dialogView by lazy { LibDetailView(requireContext()) }
     private val libName by lazy { arguments?.getString(EXTRA_LIB_NAME) ?: "" }
-    private val type by lazy { arguments?.getSerializable(EXTRA_LIB_TYPE) as LibStringAdapter.Mode }
+    private val type by lazy { arguments?.getInt(EXTRA_LIB_TYPE) ?: NATIVE }
     private val regexName by lazy { arguments?.getString(EXTRA_REGEX_NAME) }
 
     private fun List<String>.toContributorsString(): String {
@@ -59,7 +56,7 @@ class LibDetailDialogFragment : LCDialogFragment() {
             }
         }
 
-        return MaterialAlertDialogBuilder(requireContext())
+        return AlertDialog.Builder(requireContext())
             .setView(dialogView)
             .create()
     }
@@ -105,14 +102,14 @@ class LibDetailDialogFragment : LCDialogFragment() {
     companion object {
         fun newInstance(
             libName: String,
-            mode: LibStringAdapter.Mode,
+            @LibType type: Int,
             regexName: String? = null
         ): LibDetailDialogFragment {
             return LibDetailDialogFragment()
                 .apply {
                     arguments = Bundle().apply {
                         putString(EXTRA_LIB_NAME, libName)
-                        putSerializable(EXTRA_LIB_TYPE, mode)
+                        putInt(EXTRA_LIB_TYPE, type)
                         putString(EXTRA_REGEX_NAME, regexName)
                     }
                 }

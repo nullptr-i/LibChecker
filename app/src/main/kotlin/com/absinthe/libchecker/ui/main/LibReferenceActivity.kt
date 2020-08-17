@@ -13,12 +13,13 @@ import androidx.lifecycle.Observer
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.constant.GlobalValues
+import com.absinthe.libchecker.constant.NATIVE
 import com.absinthe.libchecker.databinding.ActivityLibReferenceBinding
 import com.absinthe.libchecker.recyclerview.adapter.AppAdapter
 import com.absinthe.libchecker.ui.detail.AppDetailActivity
+import com.absinthe.libchecker.ui.detail.EXTRA_PACKAGE_NAME
 import com.absinthe.libchecker.utils.AntiShakeUtils
 import com.absinthe.libchecker.utils.UiUtils
-import com.absinthe.libchecker.view.EXTRA_PKG_NAME
 import com.absinthe.libchecker.viewmodel.LibReferenceViewModel
 import com.blankj.utilcode.util.BarUtils
 import com.google.android.material.transition.platform.MaterialContainerTransformSharedElementCallback
@@ -47,20 +48,19 @@ class LibReferenceActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
 
         val name = intent.extras?.getString(EXTRA_NAME)
-        val type = intent.extras?.getSerializable(EXTRA_TYPE) as? Type
+        val type = intent.extras?.getInt(EXTRA_TYPE) ?: NATIVE
 
-        if (name == null || type == null) {
-            supportFinishAfterTransition()
+        if (name == null) {
+            finish()
         } else {
             initView()
-            binding.vfContainer.displayedChild = 0
             viewModel.setData(name, type)
         }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
-            supportFinishAfterTransition()
+            onBackPressed()
         }
         return super.onOptionsItemSelected(item)
     }
@@ -123,14 +123,12 @@ class LibReferenceActivity : BaseActivity() {
 
             val intent = Intent(this, AppDetailActivity::class.java).apply {
                 putExtras(Bundle().apply {
-                    putString(EXTRA_PKG_NAME, adapter.getItem(position).packageName)
+                    putString(EXTRA_PACKAGE_NAME, adapter.getItem(position).packageName)
                 })
             }
 
             val options = ActivityOptions.makeSceneTransitionAnimation(
-                this,
-                view,
-                "app_card_container"
+                this, view, view.transitionName
             )
 
             if (GlobalValues.isShowEntryAnimation.value!!) {
@@ -139,14 +137,5 @@ class LibReferenceActivity : BaseActivity() {
                 startActivity(intent)
             }
         }
-    }
-
-    enum class Type {
-        TYPE_ALL,
-        TYPE_NATIVE,
-        TYPE_SERVICE,
-        TYPE_ACTIVITY,
-        TYPE_BROADCAST_RECEIVER,
-        TYPE_CONTENT_PROVIDER,
     }
 }

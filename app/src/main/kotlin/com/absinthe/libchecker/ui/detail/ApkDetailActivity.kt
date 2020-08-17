@@ -6,35 +6,36 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
+import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.bean.LibStringItem
+import com.absinthe.libchecker.constant.*
 import com.absinthe.libchecker.constant.librarymap.NativeLibMap
-import com.absinthe.libchecker.databinding.ActivityApkDetailBinding
-import com.absinthe.libchecker.recyclerview.adapter.LibStringAdapter
+import com.absinthe.libchecker.databinding.ActivityAppDetailBinding
+import com.absinthe.libchecker.ktx.setLongClickCopiedToClipboard
 import com.absinthe.libchecker.ui.fragment.applist.ComponentsAnalysisFragment
-import com.absinthe.libchecker.ui.fragment.applist.SoAnalysisFragment
+import com.absinthe.libchecker.ui.fragment.applist.NativeAnalysisFragment
+import com.absinthe.libchecker.ui.fragment.applist.Sortable
 import com.absinthe.libchecker.utils.PackageUtils
+import com.absinthe.libchecker.utils.Toasty
+import com.absinthe.libchecker.viewmodel.DetailViewModel
 import com.blankj.utilcode.util.BarUtils
 import com.blankj.utilcode.util.FileIOUtils
-import com.blankj.utilcode.util.ToastUtils
 import com.google.android.material.tabs.TabLayoutMediator
 import java.io.File
-import java.io.FileNotFoundException
 
 class ApkDetailActivity : BaseActivity() {
 
-    private lateinit var binding: ActivityApkDetailBinding
+    private lateinit var binding: ActivityAppDetailBinding
     private var tempFile: File? = null
-
-    init {
-        isPaddingToolbar = true
-    }
+    private val viewModel by viewModels<DetailViewModel>()
 
     override fun setViewBinding(): View {
-        binding = ActivityApkDetailBinding.inflate(layoutInflater)
+        isPaddingToolbar = true
+        binding = ActivityAppDetailBinding.inflate(layoutInflater)
         return binding.root
     }
 
@@ -84,77 +85,96 @@ class ApkDetailActivity : BaseActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun initData(uri: Uri) {
+        tempFile = File(externalCacheDir, "temp.apk")
+
+        val path = tempFile!!.path
         val libList = ArrayList<LibStringItem>()
 
         try {
             val inputStream = contentResolver.openInputStream(uri)
-            tempFile = File(externalCacheDir, "temp.apk")
 
             FileIOUtils.writeFileFromIS(tempFile, inputStream)
-        } catch (e: FileNotFoundException) {
-            ToastUtils.showShort("Please use another File Manager to open the APK")
+
+            val packageInfo = packageManager.getPackageArchiveInfo(path, 0)
+            packageInfo?.let {
+                //Refer to https://juejin.im/post/5cb41f7b6fb9a0688b574228
+                it.applicationInfo.sourceDir = path
+                it.applicationInfo.publicSourceDir = path
+
+                supportActionBar?.apply {
+                    title = it.applicationInfo.loadLabel(packageManager)
+                }
+                binding.apply {
+                    try {
+                        ivAppIcon.apply {
+                            setImageDrawable(it.applicationInfo.loadIcon(packageManager))
+                        }
+                        tvAppName.apply {
+                            text = it.applicationInfo.loadLabel(packageManager)
+                            setLongClickCopiedToClipboard(text.toString())
+                        }
+                        tvPackageName.apply {
+                            text = packageInfo.packageName
+                            setLongClickCopiedToClipboard(text.toString())
+                        }
+                        tvVersion.apply {
+                            text = "${it.versionName}(${it.versionCode})"
+                            setLongClickCopiedToClipboard(text.toString())
+                        }
+                        tvTargetApi.text = "API ${it.applicationInfo.targetSdkVersion}"
+
+                        val abi = PackageUtils.getAbi(
+                            it.applicationInfo.sourceDir,
+                            it.applicationInfo.nativeLibraryDir,
+                            isApk = true
+                        )
+
+                        layoutAbi.tvAbi.text = PackageUtils.getAbiString(abi)
+                        layoutAbi.ivAbiType.setImageResource(PackageUtils.getAbiBadgeResource(abi))
+                    } catch (e: Exception) {
+                        supportFinishAfterTransition()
+                    }
+
+                    ibSort.setOnClickListener {
+                        Sortable.currentReference?.get()?.sort()
+                    }
+                }
+                viewModel.initComponentsData(path)
+            } ?: finish()
+        } catch (e: Exception) {
+            Toasty.show(this, R.string.toast_use_another_file_manager)
             finish()
         }
 
-        val path = tempFile!!.path
-        val packageInfo = packageManager.getPackageArchiveInfo(path, 0)
-        packageInfo?.let {
-            //Refer to https://juejin.im/post/5cb41f7b6fb9a0688b574228
-            it.applicationInfo.sourceDir = path
-            it.applicationInfo.publicSourceDir = path
-
-            supportActionBar?.apply {
-                title = it.applicationInfo.loadLabel(packageManager)
-            }
-            binding.apply {
-                try {
-                    ivAppIcon.apply {
-                        setImageDrawable(it.applicationInfo.loadIcon(packageManager))
-                    }
-                    tvAppName.text = it.applicationInfo.loadLabel(packageManager)
-                    tvPackageName.text = packageInfo.packageName
-                    tvVersion.text = "${it.versionName}(${it.versionCode})"
-                    tvTargetApi.text = "API ${it.applicationInfo.targetSdkVersion}"
-
-                    val abi = PackageUtils.getAbi(
-                        it.applicationInfo.sourceDir,
-                        it.applicationInfo.nativeLibraryDir,
-                        isApk = true
-                    )
-
-                    layoutAbi.tvAbi.text = PackageUtils.getAbiString(abi)
-                    layoutAbi.ivAbiType.setImageResource(PackageUtils.getAbiBadgeResource(abi))
-                } catch (e: Exception) {
-                    supportFinishAfterTransition()
-                }
-            }
-        } ?: finish()
+        val types = listOf(
+            NATIVE, SERVICE, ACTIVITY, RECEIVER, PROVIDER/*, DEX*/
+        )
+        val tabTitles = listOf(
+            getText(R.string.ref_category_native),
+            getText(R.string.ref_category_service),
+            getText(R.string.ref_category_activity),
+            getText(R.string.ref_category_br),
+            getText(R.string.ref_category_cp),
+            getText(R.string.ref_category_dex)
+        )
 
         binding.viewpager.adapter = object : FragmentStateAdapter(this) {
             override fun getItemCount(): Int {
-                return 5
+                return types.size
             }
 
             override fun createFragment(position: Int): Fragment {
                 return when (position) {
-                    0 -> SoAnalysisFragment.newInstance(tempFile!!.path)
-                    1 -> ComponentsAnalysisFragment.newInstance(tempFile!!.path, LibStringAdapter.Mode.SERVICE)
-                    2 -> ComponentsAnalysisFragment.newInstance(tempFile!!.path, LibStringAdapter.Mode.ACTIVITY)
-                    3 -> ComponentsAnalysisFragment.newInstance(tempFile!!.path, LibStringAdapter.Mode.RECEIVER)
-                    else -> ComponentsAnalysisFragment.newInstance(tempFile!!.path, LibStringAdapter.Mode.PROVIDER)
+                    types.indexOf(NATIVE) -> NativeAnalysisFragment.newInstance(path, NATIVE)
+                    types.indexOf(DEX) -> NativeAnalysisFragment.newInstance(path, DEX)
+                    else -> ComponentsAnalysisFragment.newInstance(types[position])
                 }
             }
         }
 
         val mediator = TabLayoutMediator(binding.tabLayout, binding.viewpager,
             TabLayoutMediator.TabConfigurationStrategy { tab, position ->
-                when (position) {
-                    0 -> tab.text = getText(R.string.ref_category_native)
-                    1 -> tab.text = getText(R.string.ref_category_service)
-                    2 -> tab.text = getText(R.string.ref_category_activity)
-                    3 -> tab.text = getText(R.string.ref_category_br)
-                    else -> tab.text = getText(R.string.ref_category_cp)
-                }
+                tab.text = tabTitles[position]
             })
         mediator.attach()
 

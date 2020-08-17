@@ -8,17 +8,14 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.absinthe.libchecker.R
+import com.absinthe.libchecker.LibCheckerApp
 import com.absinthe.libchecker.api.ApiManager
 import com.absinthe.libchecker.api.bean.NativeLibDetailBean
 import com.absinthe.libchecker.api.request.NativeLibDetailRequest
 import com.absinthe.libchecker.bean.LibStringItem
-import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.constant.librarymap.BaseMap
+import com.absinthe.libchecker.constant.*
 import com.absinthe.libchecker.constant.librarymap.NativeLibMap
-import com.absinthe.libchecker.recyclerview.adapter.LibStringAdapter
 import com.absinthe.libchecker.ui.fragment.applist.MODE_SORT_BY_SIZE
-import com.absinthe.libchecker.ui.main.LibReferenceActivity
 import com.absinthe.libchecker.utils.PackageUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,12 +28,21 @@ import retrofit2.converter.gson.GsonConverterFactory
 
 class DetailViewModel(application: Application) : AndroidViewModel(application) {
 
-    val libItems: MutableLiveData<List<LibStringItem>> = MutableLiveData()
-    val componentsItems: MutableLiveData<List<String>> = MutableLiveData()
     val detailBean: MutableLiveData<NativeLibDetailBean?> = MutableLiveData()
 
-    fun initSoAnalysisData(context: Context, packageName: String) =
+    val nativeLibItems: MutableLiveData<List<LibStringItem>> = MutableLiveData()
+    val dexLibItems: MutableLiveData<List<LibStringItem>> = MutableLiveData()
+    val componentsMap: HashMap<Int, MutableLiveData<List<String>>> = hashMapOf(
+        SERVICE to MutableLiveData(),
+        ACTIVITY to MutableLiveData(),
+        RECEIVER to MutableLiveData(),
+        PROVIDER to MutableLiveData()
+    )
+    var sortMode = GlobalValues.libSortMode.value ?: MODE_SORT_BY_SIZE
+
+    fun initSoAnalysisData(packageName: String) =
         viewModelScope.launch(Dispatchers.IO) {
+            val context: Context = getApplication<LibCheckerApp>()
             val list = ArrayList<LibStringItem>()
 
             try {
@@ -54,35 +60,29 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
 
                 info?.let {
                     list.addAll(
-                        getAbiByNativeDir(
-                            context,
-                            info.sourceDir,
-                            info.nativeLibraryDir ?: ""
-                        )
+                        getAbiByNativeDir(info.sourceDir, info.nativeLibraryDir ?: "")
                     )
                 }
             } catch (e: PackageManager.NameNotFoundException) {
                 e.printStackTrace()
-                list.add(LibStringItem("Not found"))
             }
 
             withContext(Dispatchers.Main) {
-                libItems.value = list
+                nativeLibItems.value = list
             }
         }
 
-    fun initComponentsData(context: Context, packageName: String, type: LibReferenceActivity.Type) =
-        viewModelScope.launch(Dispatchers.IO) {
-            val map = BaseMap.getMap(type)
-            val list: MutableList<String> = mutableListOf()
+    fun initDexData(packageName: String) = viewModelScope.launch(Dispatchers.IO) {
+        val list = PackageUtils.getDexList(packageName)
 
-            val flag = when (type) {
-                LibReferenceActivity.Type.TYPE_SERVICE -> PackageManager.GET_SERVICES
-                LibReferenceActivity.Type.TYPE_ACTIVITY -> PackageManager.GET_ACTIVITIES
-                LibReferenceActivity.Type.TYPE_BROADCAST_RECEIVER -> PackageManager.GET_RECEIVERS
-                LibReferenceActivity.Type.TYPE_CONTENT_PROVIDER -> PackageManager.GET_PROVIDERS
-                else -> 0
-            }
+        withContext(Dispatchers.Main) {
+            dexLibItems.value = list
+        }
+    }
+
+    fun initComponentsData(packageName: String) =
+        viewModelScope.launch(Dispatchers.IO) {
+            val context: Context = getApplication<LibCheckerApp>()
 
             val pmFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 PackageManager.MATCH_DISABLED_COMPONENTS
@@ -92,35 +92,50 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
 
             try {
                 if (packageName.endsWith("/temp.apk")) {
-                    context.packageManager.getPackageArchiveInfo(packageName, flag or pmFlag)?.apply {
+                    context.packageManager.getPackageArchiveInfo(
+                        packageName,
+                        PackageManager.GET_SERVICES
+                                or PackageManager.GET_ACTIVITIES
+                                or PackageManager.GET_RECEIVERS
+                                or PackageManager.GET_PROVIDERS
+                                or pmFlag
+                    )?.apply {
                         applicationInfo.sourceDir = packageName
                         applicationInfo.publicSourceDir = packageName
                     }?.let {
-                        list.addAll(PackageUtils.getComponentList(it, type, true))
+                        val services = PackageUtils.getComponentList(it.packageName, it.services, true)
+                        val activities = PackageUtils.getComponentList(it.packageName, it.activities, true)
+                        val receivers = PackageUtils.getComponentList(it.packageName, it.receivers, true)
+                        val providers = PackageUtils.getComponentList(it.packageName, it.providers, true)
+
+                        withContext(Dispatchers.Main) {
+                            componentsMap[SERVICE]?.value = services
+                            componentsMap[ACTIVITY]?.value = activities
+                            componentsMap[RECEIVER]?.value = receivers
+                            componentsMap[PROVIDER]?.value = providers
+                        }
                     }
                 } else {
-                    list.addAll(PackageUtils.getComponentList(packageName, type, true))
+                    PackageUtils.getPackageInfo(packageName).let {
+                        val services = PackageUtils.getComponentList(it.packageName, SERVICE, true)
+                        val activities = PackageUtils.getComponentList(it.packageName, ACTIVITY, true)
+                        val receivers = PackageUtils.getComponentList(it.packageName, RECEIVER, true)
+                        val providers = PackageUtils.getComponentList(it.packageName, PROVIDER, true)
+
+                        withContext(Dispatchers.Main) {
+                            componentsMap[SERVICE]?.value = services
+                            componentsMap[ACTIVITY]?.value = activities
+                            componentsMap[RECEIVER]?.value = receivers
+                            componentsMap[PROVIDER]?.value = providers
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                list.add("Not found")
-            }
-
-            if (list.isEmpty()) {
-                try {
-                    list.addAll(PackageUtils.getFreezeComponentList(packageName, type, true))
-                } catch (e: Exception) {
-                    list.add("Not found")
-                }
-            }
-
-            list.sortByDescending { map.contains(it) }
-
-            withContext(Dispatchers.Main) {
-                componentsItems.value = list
+                e.printStackTrace()
             }
         }
 
-    fun requestLibDetail(libName: String, type: LibStringAdapter.Mode, isRegex: Boolean = false) =
+    fun requestLibDetail(libName: String, @LibType type: Int, isRegex: Boolean = false) =
         viewModelScope.launch(Dispatchers.IO) {
             val retrofit = Retrofit.Builder()
                 .baseUrl(ApiManager.root)
@@ -129,11 +144,12 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
             val request = retrofit.create(NativeLibDetailRequest::class.java)
 
             var categoryDir = when (type) {
-                LibStringAdapter.Mode.NATIVE -> "native-libs"
-                LibStringAdapter.Mode.SERVICE -> "services-libs"
-                LibStringAdapter.Mode.ACTIVITY -> "activities-libs"
-                LibStringAdapter.Mode.RECEIVER -> "receivers-libs"
-                LibStringAdapter.Mode.PROVIDER -> "providers-libs"
+                NATIVE -> "native-libs"
+                SERVICE -> "services-libs"
+                ACTIVITY -> "activities-libs"
+                RECEIVER -> "receivers-libs"
+                PROVIDER -> "providers-libs"
+                else -> throw IllegalArgumentException("Illegal LibType.")
             }
             if (isRegex) {
                 categoryDir += "/regex"
@@ -155,15 +171,11 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
             })
         }
 
-    private fun getAbiByNativeDir(
-        context: Context,
-        sourcePath: String,
-        nativePath: String
-    ): List<LibStringItem> {
+    private fun getAbiByNativeDir(sourcePath: String, nativePath: String): List<LibStringItem> {
         val list = PackageUtils.getNativeDirLibs(sourcePath, nativePath).toMutableList()
 
         if (list.isEmpty()) {
-            list.add(LibStringItem(context.getString(R.string.empty_list)))
+            return list
         } else {
             if (GlobalValues.libSortMode.value == MODE_SORT_BY_SIZE) {
                 list.sortByDescending { it.size }

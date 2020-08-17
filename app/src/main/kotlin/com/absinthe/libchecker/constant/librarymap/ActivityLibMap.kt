@@ -23,6 +23,10 @@ object ActivityLibMap : BaseMap() {
             LibChip(R.drawable.ic_lib_google, "Google AdMob")
         ),
         Pair(
+            "androidx.slice.compat.SlicePermissionActivity",
+            LibChip(R.drawable.ic_lib_jetpack, "Jetpack Slice")
+        ),
+        Pair(
             "com.tencent.tauth.AuthActivity",
             LibChip(R.drawable.ic_lib_tencent, "腾讯开放平台")
         ),
@@ -171,6 +175,10 @@ object ActivityLibMap : BaseMap() {
             LibChip(R.drawable.ic_question, "uCrop")
         ),
         Pair(
+            "com.yalantis.ucrop.PictureMultiCuttingActivity",
+            LibChip(R.drawable.ic_question, "uCrop")
+        ),
+        Pair(
             "com.zhihu.matisse.internal.ui.AlbumPreviewActivity",
             LibChip(R.drawable.ic_lib_zhihu, "Matisse")
         ),
@@ -219,6 +227,10 @@ object ActivityLibMap : BaseMap() {
             LibChip(R.drawable.ic_lib_aliyun, "阿里移动推送")
         ),
         Pair(
+            "com.taobao.weex.WXGlobalEventReceiver",
+            LibChip(R.drawable.ic_lib_alibaba, "Weex")
+        ),
+        Pair(
             "cmb.pb.ui.PBKeyboardActivity",
             LibChip(R.drawable.ic_lib_cmb, "招商银行 SDK")
         ),
@@ -253,6 +265,30 @@ object ActivityLibMap : BaseMap() {
         Pair(
             "com.soundcloud.android.crop.CropImageActivity",
             LibChip(R.drawable.ic_question, "android-crop")
+        ),
+        Pair(
+            "com.yanzhenjie.permission.bridge.BridgeActivity",
+            LibChip(R.drawable.ic_question, "AndPermission")
+        ),
+        Pair(
+            "com.yanzhenjie.permission.PermissionActivity",
+            LibChip(R.drawable.ic_question, "AndPermission")
+        ),
+        Pair(
+            "com.google.ar.core.InstallActivity",
+            LibChip(R.drawable.ic_lib_google_arcore, "ARCore")
+        ),
+        Pair(
+            "com.cmic.sso.sdk.activity.LoginAuthActivity",
+            LibChip(R.drawable.ic_lib_jverification, "极光认证")
+        ),
+        Pair(
+            "pub.devrel.easypermissions.AppSettingsDialogHolderActivity",
+            LibChip(R.drawable.ic_question, "EasyPermissions")
+        ),
+        Pair(
+            "com.bestpay.app.H5PayActivity",
+            LibChip(R.drawable.ic_question, "翼支付")
         )
     )
 

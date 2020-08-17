@@ -2,27 +2,37 @@ package com.absinthe.libchecker.recyclerview.adapter
 
 import android.content.res.ColorStateList
 import android.view.View
+import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.bean.LibStringItem
+import com.absinthe.libchecker.constant.DEX
 import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.constant.librarymap.*
+import com.absinthe.libchecker.constant.LibType
+import com.absinthe.libchecker.constant.librarymap.BaseMap
 import com.absinthe.libchecker.utils.PackageUtils
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.google.android.material.chip.Chip
+import com.zhangyue.we.x2c.X2C
+import com.zhangyue.we.x2c.ano.Xml
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class LibStringAdapter : BaseQuickAdapter<LibStringItem, BaseViewHolder>(R.layout.item_lib_string) {
+@Xml(layouts = ["item_lib_string"])
+class LibStringAdapter(@LibType val type: Int) : BaseQuickAdapter<LibStringItem, BaseViewHolder>(0) {
 
-    var mode = Mode.NATIVE
+    private val map: BaseMap = BaseMap.getMap(type)
 
     init {
         addChildClickViewIds(R.id.chip)
+    }
+
+    override fun onCreateDefViewHolder(parent: ViewGroup, viewType: Int): BaseViewHolder {
+        return createBaseViewHolder(X2C.inflate(context, R.layout.item_lib_string, parent, false))
     }
 
     override fun convert(holder: BaseViewHolder, item: LibStringItem) {
@@ -30,19 +40,16 @@ class LibStringAdapter : BaseQuickAdapter<LibStringItem, BaseViewHolder>(R.layou
         holder.setGone(R.id.tv_lib_size, item.size == 0L)
 
         if (item.size != 0L) {
-            holder.setText(R.id.tv_lib_size, PackageUtils.sizeToString(item.size))
+            val text = if (type == DEX) {
+                "${item.size} files"
+            } else {
+                PackageUtils.sizeToString(item.size)
+            }
+            holder.setText(R.id.tv_lib_size, text)
         }
 
         (context as BaseActivity).lifecycleScope.launch(Dispatchers.IO) {
             val libIcon = holder.getView<Chip>(R.id.chip)
-
-            val map: BaseMap = when (mode) {
-                Mode.NATIVE -> NativeLibMap
-                Mode.SERVICE -> ServiceLibMap
-                Mode.ACTIVITY -> ActivityLibMap
-                Mode.RECEIVER -> ReceiverLibMap
-                Mode.PROVIDER -> ProviderLibMap
-            }
 
             map.getChip(item.name)?.let {
                 libIcon.apply {
@@ -52,7 +59,7 @@ class LibStringAdapter : BaseQuickAdapter<LibStringItem, BaseViewHolder>(R.layou
                         visibility = View.VISIBLE
 
                         if (!GlobalValues.isColorfulIcon.value!!) {
-                            libIcon.chipIconTint = ColorStateList.valueOf(
+                            chipIconTint = ColorStateList.valueOf(
                                 ContextCompat.getColor(
                                     context,
                                     R.color.textNormal
@@ -65,13 +72,5 @@ class LibStringAdapter : BaseQuickAdapter<LibStringItem, BaseViewHolder>(R.layou
                 libIcon.visibility = View.GONE
             }
         }
-    }
-
-    enum class Mode {
-        NATIVE,
-        SERVICE,
-        ACTIVITY,
-        RECEIVER,
-        PROVIDER
     }
 }

@@ -4,24 +4,24 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
-import android.content.pm.PackageManager
 import android.text.format.Formatter
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.absinthe.libchecker.LibCheckerApp
 import com.absinthe.libchecker.bean.*
-import com.absinthe.libchecker.constant.GlobalValues
+import com.absinthe.libchecker.constant.*
 import com.absinthe.libchecker.database.LCDatabase
 import com.absinthe.libchecker.database.LCRepository
 import com.absinthe.libchecker.database.SnapshotItem
 import com.absinthe.libchecker.recyclerview.adapter.snapshot.ARROW
-import com.absinthe.libchecker.ui.main.LibReferenceActivity
 import com.absinthe.libchecker.utils.PackageUtils
 import com.blankj.utilcode.util.Utils
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -32,287 +32,270 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
     val snapshotDiffItems: MutableLiveData<List<SnapshotDiffItem>> = MutableLiveData()
     val snapshotDetailItems: MutableLiveData<List<SnapshotDetailItem>> = MutableLiveData()
 
+    private val gson: Gson
     private val repository: LCRepository
 
     init {
         val lcDao = LCDatabase.getDatabase(application).lcDao()
         repository = LCRepository(lcDao)
         snapshotItems = repository.allSnapshotItems
+        gson = Gson()
     }
 
-    fun insertSnapshots(items: List<SnapshotItem>) = viewModelScope.launch(Dispatchers.IO) {
-        repository.insertSnapshots(items)
-    }
-
-    fun deleteAllSnapshots() = viewModelScope.launch(Dispatchers.IO) {
-        repository.deleteAllSnapshots()
-    }
-
-    fun computeSnapshots(context: Context) = viewModelScope.launch(Dispatchers.IO) {
+    fun computeSnapshots() = viewModelScope.launch(Dispatchers.IO) {
+        GlobalValues.snapshotTimestamp = 0
         deleteAllSnapshots()
 
-        val dbList = mutableListOf<SnapshotItem>()
-        val appList = context.packageManager
-            .getInstalledApplications(PackageManager.GET_SHARED_LIBRARY_FILES)
-        var packageInfo: PackageInfo
-        val gson = Gson()
+        val context: Context = getApplication<LibCheckerApp>()
+        var appList: List<ApplicationInfo>? = null
 
-        for (info in appList) {
-            try {
-                packageInfo = PackageUtils.getPackageInfo(info)
-
-                dbList.add(
-                    SnapshotItem(
-                        packageInfo.packageName,//Package name
-                        info.loadLabel(context.packageManager).toString(),//App name
-                        packageInfo.versionName ?: "null",//Version name
-                        PackageUtils.getVersionCode(packageInfo),//Version code
-                        packageInfo.firstInstallTime,//Install time
-                        packageInfo.lastUpdateTime,// Update time
-                        (info.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM,//Is system app
-                        PackageUtils.getAbi(info.sourceDir, info.nativeLibraryDir)
-                            .toShort(),//Abi type
-                        info.targetSdkVersion.toShort(),//Target API
-                        gson.toJson(
-                            PackageUtils.getNativeDirLibs(
-                                info.sourceDir,
-                                info.nativeLibraryDir
-                            )
-                        ),//Native libs
-                        gson.toJson(
-                            PackageUtils.getComponentList(
-                                packageInfo.packageName,
-                                LibReferenceActivity.Type.TYPE_SERVICE,
-                                false
-                            )
-                        ),
-                        gson.toJson(
-                            PackageUtils.getComponentList(
-                                packageInfo.packageName,
-                                LibReferenceActivity.Type.TYPE_ACTIVITY,
-                                false
-                            )
-                        ),
-                        gson.toJson(
-                            PackageUtils.getComponentList(
-                                packageInfo.packageName,
-                                LibReferenceActivity.Type.TYPE_BROADCAST_RECEIVER,
-                                false
-                            )
-                        ),
-                        gson.toJson(
-                            PackageUtils.getComponentList(
-                                packageInfo.packageName,
-                                LibReferenceActivity.Type.TYPE_CONTENT_PROVIDER,
-                                false
-                            )
-                        )
-                    )
-                )
+        repeat(5) {
+            appList = try {
+                PackageUtils.getInstallApplications()
             } catch (e: Exception) {
-                continue
+                null
+            }
+
+            if (appList != null) {
+                return@repeat
+            } else {
+                delay(100)
             }
         }
 
-        insertSnapshots(dbList)
-        withContext(Dispatchers.Main) {
-            val ts = System.currentTimeMillis()
-            GlobalValues.snapshotTimestamp = ts
-            timestamp.value = ts
-        }
-    }
+        appList?.let { list ->
+            val dbList = mutableListOf<SnapshotItem>()
+            val gson = Gson()
 
-    fun computeDiff(context: Context) = viewModelScope.launch(Dispatchers.IO) {
-        if (snapshotItems.value.isNullOrEmpty()) return@launch
-
-        val diffList = mutableListOf<SnapshotDiffItem>()
-        val packageManager = context.packageManager
-        val appList = packageManager
-            .getInstalledApplications(PackageManager.GET_SHARED_LIBRARY_FILES)
-        val gson = Gson()
-
-        var packageInfo: PackageInfo
-        var versionCode: Long
-
-        snapshotItems.value?.let { dbItems ->
-            for (dbItem in dbItems) {
+            for (info in list) {
                 try {
-                    appList.find { it.packageName == dbItem.packageName }?.let {
-                        packageInfo = PackageUtils.getPackageInfo(it)
-                        versionCode = PackageUtils.getVersionCode(packageInfo)
-
-                        if (packageInfo.lastUpdateTime > dbItem.lastUpdatedTime) {
-                            diffList.add(
-                                SnapshotDiffItem(
-                                    packageInfo.packageName,
-                                    packageInfo.lastUpdateTime,
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.label,
-                                        it.loadLabel(packageManager).toString()
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.versionName,
-                                        packageInfo.versionName
-                                    ),
-                                    SnapshotDiffItem.DiffNode(dbItem.versionCode, versionCode),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.abi,
-                                        PackageUtils.getAbi(it.sourceDir, it.nativeLibraryDir)
-                                            .toShort()
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.targetApi,
-                                        it.targetSdkVersion.toShort()
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.nativeLibs, gson.toJson(
-                                            PackageUtils.getNativeDirLibs(
-                                                it.sourceDir,
-                                                it.nativeLibraryDir
-                                            )
-                                        )
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.services, gson.toJson(
-                                            PackageUtils.getComponentList(
-                                                packageInfo.packageName,
-                                                LibReferenceActivity.Type.TYPE_SERVICE,
-                                                false
-                                            )
-                                        )
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.activities, gson.toJson(
-                                            PackageUtils.getComponentList(
-                                                packageInfo.packageName,
-                                                LibReferenceActivity.Type.TYPE_ACTIVITY,
-                                                false
-                                            )
-                                        )
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.receivers, gson.toJson(
-                                            PackageUtils.getComponentList(
-                                                packageInfo.packageName,
-                                                LibReferenceActivity.Type.TYPE_BROADCAST_RECEIVER,
-                                                false
-                                            )
-                                        )
-                                    ),
-                                    SnapshotDiffItem.DiffNode(
-                                        dbItem.providers, gson.toJson(
-                                            PackageUtils.getComponentList(
-                                                packageInfo.packageName,
-                                                LibReferenceActivity.Type.TYPE_CONTENT_PROVIDER,
-                                                false
-                                            )
-                                        )
-                                    )
+                    PackageUtils.getPackageInfo(info.packageName).let {
+                        dbList.add(
+                            SnapshotItem(
+                                it.packageName,//Package name
+                                info.loadLabel(context.packageManager).toString(),//App name
+                                it.versionName ?: "null",//Version name
+                                PackageUtils.getVersionCode(it),//Version code
+                                it.firstInstallTime,//Install time
+                                it.lastUpdateTime,// Update time
+                                (info.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM,//Is system app
+                                PackageUtils.getAbi(info.sourceDir, info.nativeLibraryDir)
+                                    .toShort(),//Abi type
+                                info.targetSdkVersion.toShort(),//Target API
+                                gson.toJson(
+                                    PackageUtils.getNativeDirLibs(info.sourceDir, info.nativeLibraryDir)
+                                ),//Native libs
+                                gson.toJson(
+                                    PackageUtils.getComponentList(it.packageName, SERVICE, false)
+                                ),
+                                gson.toJson(
+                                    PackageUtils.getComponentList(it.packageName, ACTIVITY, false)
+                                ),
+                                gson.toJson(
+                                    PackageUtils.getComponentList(it.packageName, RECEIVER, false)
+                                ),
+                                gson.toJson(
+                                    PackageUtils.getComponentList(it.packageName, PROVIDER, false)
                                 )
-                            )
-                        }
-
-                        appList.remove(it)
-                    } ?: run {
-                        diffList.add(
-                            SnapshotDiffItem(
-                                dbItem.packageName,
-                                dbItem.lastUpdatedTime,
-                                SnapshotDiffItem.DiffNode(dbItem.label),
-                                SnapshotDiffItem.DiffNode(dbItem.versionName),
-                                SnapshotDiffItem.DiffNode(dbItem.versionCode),
-                                SnapshotDiffItem.DiffNode(dbItem.abi),
-                                SnapshotDiffItem.DiffNode(dbItem.targetApi),
-                                SnapshotDiffItem.DiffNode(dbItem.nativeLibs),
-                                SnapshotDiffItem.DiffNode(dbItem.services),
-                                SnapshotDiffItem.DiffNode(dbItem.activities),
-                                SnapshotDiffItem.DiffNode(dbItem.receivers),
-                                SnapshotDiffItem.DiffNode(dbItem.providers),
-                                deleted = true
                             )
                         )
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
                     continue
                 }
             }
 
-            for (info in appList) {
-                try {
-                    packageInfo = PackageUtils.getPackageInfo(info)
-                    versionCode = PackageUtils.getVersionCode(packageInfo)
+            insertSnapshots(dbList)
+            withContext(Dispatchers.Main) {
+                val ts = System.currentTimeMillis()
+                GlobalValues.snapshotTimestamp = ts
+                timestamp.value = ts
+            }
+        } ?: withContext(Dispatchers.Main) {
+            GlobalValues.snapshotTimestamp = 0
+            timestamp.value = 0
+        }
+    }
 
-                    diffList.add(
-                        SnapshotDiffItem(
-                            packageInfo.packageName,
-                            packageInfo.lastUpdateTime,
-                            SnapshotDiffItem.DiffNode(info.loadLabel(packageManager).toString()),
-                            SnapshotDiffItem.DiffNode(packageInfo.versionName),
-                            SnapshotDiffItem.DiffNode(versionCode),
-                            SnapshotDiffItem.DiffNode(
-                                PackageUtils.getAbi(
-                                    info.sourceDir,
-                                    info.nativeLibraryDir
-                                ).toShort()
-                            ),
-                            SnapshotDiffItem.DiffNode(info.targetSdkVersion.toShort()),
-                            SnapshotDiffItem.DiffNode(
-                                gson.toJson(
-                                    PackageUtils.getNativeDirLibs(
-                                        info.sourceDir,
-                                        info.nativeLibraryDir
-                                    )
-                                )
-                            ),
-                            SnapshotDiffItem.DiffNode(
-                                gson.toJson(
-                                    PackageUtils.getComponentList(
-                                        packageInfo.packageName,
-                                        LibReferenceActivity.Type.TYPE_SERVICE,
-                                        false
-                                    )
-                                )
-                            ),
-                            SnapshotDiffItem.DiffNode(
-                                gson.toJson(
-                                    PackageUtils.getComponentList(
-                                        packageInfo.packageName,
-                                        LibReferenceActivity.Type.TYPE_ACTIVITY,
-                                        false
-                                    )
-                                )
-                            ),
-                            SnapshotDiffItem.DiffNode(
-                                gson.toJson(
-                                    PackageUtils.getComponentList(
-                                        packageInfo.packageName,
-                                        LibReferenceActivity.Type.TYPE_BROADCAST_RECEIVER,
-                                        false
-                                    )
-                                )
-                            ),
-                            SnapshotDiffItem.DiffNode(
-                                gson.toJson(
-                                    PackageUtils.getComponentList(
-                                        packageInfo.packageName,
-                                        LibReferenceActivity.Type.TYPE_CONTENT_PROVIDER,
-                                        false
-                                    )
-                                )
-                            ),
-                            newInstalled = true
-                        )
-                    )
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    continue
-                }
+    fun computeDiff() = viewModelScope.launch(Dispatchers.IO) {
+        if (snapshotItems.value.isNullOrEmpty()) return@launch
+
+        val context: Context = getApplication<LibCheckerApp>()
+        var appList: MutableList<ApplicationInfo>? = null
+
+        repeat(5) {
+            appList = try {
+                PackageUtils.getInstallApplications().toMutableList()
+            } catch (e: Exception) {
+                null
+            }
+
+            if (appList != null) {
+                return@repeat
+            } else {
+                delay(100)
             }
         }
 
-        withContext(Dispatchers.Main) {
-            snapshotDiffItems.value = diffList
+        val diffList = mutableListOf<SnapshotDiffItem>()
+        val packageManager = context.packageManager
+        val gson = Gson()
+
+        var packageInfo: PackageInfo
+        var versionCode: Long
+        var compareDiffNode: CompareDiffNode
+        var snapshotDiffItem: SnapshotDiffItem
+
+        appList?.let { list ->
+            snapshotItems.value?.let { dbItems ->
+                for (dbItem in dbItems) {
+                    try {
+                        list.find { it.packageName == dbItem.packageName }?.let {
+                            packageInfo = PackageUtils.getPackageInfo(it)
+                            versionCode = PackageUtils.getVersionCode(packageInfo)
+
+                            if (versionCode > dbItem.versionCode || packageInfo.lastUpdateTime > dbItem.lastUpdatedTime) {
+                                snapshotDiffItem = SnapshotDiffItem(
+                                    packageName = packageInfo.packageName,
+                                    updateTime = packageInfo.lastUpdateTime,
+                                    labelDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.label,
+                                        it.loadLabel(packageManager).toString()
+                                    ),
+                                    versionNameDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.versionName,
+                                        packageInfo.versionName
+                                    ),
+                                    versionCodeDiff = SnapshotDiffItem.DiffNode(dbItem.versionCode, versionCode),
+                                    abiDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.abi,
+                                        PackageUtils.getAbi(it.sourceDir, it.nativeLibraryDir)
+                                            .toShort()
+                                    ),
+                                    targetApiDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.targetApi,
+                                        it.targetSdkVersion.toShort()
+                                    ),
+                                    nativeLibsDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.nativeLibs, gson.toJson(
+                                            PackageUtils.getNativeDirLibs(it.sourceDir, it.nativeLibraryDir)
+                                        )
+                                    ),
+                                    servicesDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.services, gson.toJson(
+                                            PackageUtils.getComponentList(packageInfo.packageName, SERVICE, false)
+                                        )
+                                    ),
+                                    activitiesDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.activities, gson.toJson(
+                                            PackageUtils.getComponentList(packageInfo.packageName, ACTIVITY, false)
+                                        )
+                                    ),
+                                    receiversDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.receivers, gson.toJson(
+                                            PackageUtils.getComponentList(packageInfo.packageName, RECEIVER, false)
+                                        )
+                                    ),
+                                    providersDiff = SnapshotDiffItem.DiffNode(
+                                        dbItem.providers, gson.toJson(
+                                            PackageUtils.getComponentList(packageInfo.packageName, PROVIDER, false)
+                                        )
+                                    )
+                                )
+                                compareDiffNode = compareNativeAndComponentDiff(snapshotDiffItem)
+                                snapshotDiffItem.added = compareDiffNode.added
+                                snapshotDiffItem.removed = compareDiffNode.removed
+                                snapshotDiffItem.changed = compareDiffNode.changed
+                                snapshotDiffItem.moved = compareDiffNode.moved
+
+                                diffList.add(snapshotDiffItem)
+                            }
+
+                            list.remove(it)
+                        } ?: run {
+                            diffList.add(
+                                SnapshotDiffItem(
+                                    dbItem.packageName,
+                                    dbItem.lastUpdatedTime,
+                                    SnapshotDiffItem.DiffNode(dbItem.label),
+                                    SnapshotDiffItem.DiffNode(dbItem.versionName),
+                                    SnapshotDiffItem.DiffNode(dbItem.versionCode),
+                                    SnapshotDiffItem.DiffNode(dbItem.abi),
+                                    SnapshotDiffItem.DiffNode(dbItem.targetApi),
+                                    SnapshotDiffItem.DiffNode(dbItem.nativeLibs),
+                                    SnapshotDiffItem.DiffNode(dbItem.services),
+                                    SnapshotDiffItem.DiffNode(dbItem.activities),
+                                    SnapshotDiffItem.DiffNode(dbItem.receivers),
+                                    SnapshotDiffItem.DiffNode(dbItem.providers),
+                                    deleted = true
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        continue
+                    }
+                }
+
+                for (info in list) {
+                    try {
+                        packageInfo = PackageUtils.getPackageInfo(info)
+                        versionCode = PackageUtils.getVersionCode(packageInfo)
+
+                        diffList.add(
+                            SnapshotDiffItem(
+                                packageInfo.packageName,
+                                packageInfo.lastUpdateTime,
+                                SnapshotDiffItem.DiffNode(info.loadLabel(packageManager).toString()),
+                                SnapshotDiffItem.DiffNode(packageInfo.versionName),
+                                SnapshotDiffItem.DiffNode(versionCode),
+                                SnapshotDiffItem.DiffNode(
+                                    PackageUtils.getAbi(
+                                        info.sourceDir,
+                                        info.nativeLibraryDir
+                                    ).toShort()
+                                ),
+                                SnapshotDiffItem.DiffNode(info.targetSdkVersion.toShort()),
+                                SnapshotDiffItem.DiffNode(
+                                    gson.toJson(
+                                        PackageUtils.getNativeDirLibs(info.sourceDir, info.nativeLibraryDir)
+                                    )
+                                ),
+                                SnapshotDiffItem.DiffNode(
+                                    gson.toJson(
+                                        PackageUtils.getComponentList(packageInfo.packageName, SERVICE, false)
+                                    )
+                                ),
+                                SnapshotDiffItem.DiffNode(
+                                    gson.toJson(
+                                        PackageUtils.getComponentList(packageInfo.packageName, ACTIVITY, false)
+                                    )
+                                ),
+                                SnapshotDiffItem.DiffNode(
+                                    gson.toJson(
+                                        PackageUtils.getComponentList(packageInfo.packageName, RECEIVER, false)
+                                    )
+                                ),
+                                SnapshotDiffItem.DiffNode(
+                                    gson.toJson(
+                                        PackageUtils.getComponentList(packageInfo.packageName, PROVIDER, false)
+                                    )
+                                ),
+                                newInstalled = true
+                            )
+                        )
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        continue
+                    }
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                snapshotDiffItems.value = diffList
+            }
+        } ?: withContext(Dispatchers.Main) {
+            snapshotDiffItems.value = listOf()
         }
     }
 
@@ -342,7 +325,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
                     entity.servicesDiff.new,
                     object : TypeToken<List<String>>() {}.type
                 ),
-                LibReferenceActivity.Type.TYPE_SERVICE
+                SERVICE
             )
         )
         list.addAll(
@@ -355,7 +338,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
                     entity.activitiesDiff.new,
                     object : TypeToken<List<String>>() {}.type
                 ),
-                LibReferenceActivity.Type.TYPE_ACTIVITY
+                ACTIVITY
             )
         )
         list.addAll(
@@ -368,7 +351,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
                     entity.receiversDiff.new,
                     object : TypeToken<List<String>>() {}.type
                 ),
-                LibReferenceActivity.Type.TYPE_BROADCAST_RECEIVER
+                RECEIVER
             )
         )
         list.addAll(
@@ -381,7 +364,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
                     entity.providersDiff.new,
                     object : TypeToken<List<String>>() {}.type
                 ),
-                LibReferenceActivity.Type.TYPE_CONTENT_PROVIDER
+                PROVIDER
             )
         )
 
@@ -389,6 +372,12 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
             snapshotDetailItems.value = list
         }
     }
+
+    private fun insertSnapshots(items: List<SnapshotItem>) = viewModelScope.launch(Dispatchers.IO) {
+        repository.insertSnapshots(items)
+    }
+
+    private fun deleteAllSnapshots() = repository.deleteAllSnapshots()
 
     private fun getNativeDiffList(
         oldList: List<LibStringItem>,
@@ -407,12 +396,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
             oldList.find { it.name == item.name }?.let {
                 if (it.size != item.size) {
                     list.add(
-                        SnapshotDetailItem(
-                            it.name,
-                            "${sizeToString(it.size)} $ARROW ${sizeToString(item.size)}",
-                            CHANGED,
-                            LibReferenceActivity.Type.TYPE_NATIVE
-                        )
+                        SnapshotDetailItem(it.name, it.name, "${sizeToString(it.size)} $ARROW ${sizeToString(item.size)}", CHANGED, NATIVE)
                     )
                 }
                 sameList.add(item)
@@ -426,22 +410,12 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
 
         for (item in tempOldList) {
             list.add(
-                SnapshotDetailItem(
-                    item.name,
-                    PackageUtils.sizeToString(item.size),
-                    REMOVED,
-                    LibReferenceActivity.Type.TYPE_NATIVE
-                )
+                SnapshotDetailItem(item.name, item.name, PackageUtils.sizeToString(item.size), REMOVED, NATIVE)
             )
         }
         for (item in tempNewList) {
             list.add(
-                SnapshotDetailItem(
-                    item.name,
-                    PackageUtils.sizeToString(item.size),
-                    ADDED,
-                    LibReferenceActivity.Type.TYPE_NATIVE
-                )
+                SnapshotDetailItem(item.name, item.name, PackageUtils.sizeToString(item.size), ADDED, NATIVE)
             )
         }
 
@@ -451,7 +425,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
     private fun getComponentsDiffList(
         oldList: List<String>,
         newList: List<String>?,
-        type: LibReferenceActivity.Type
+        @LibType type: Int
     ): List<SnapshotDetailItem> {
         val list = mutableListOf<SnapshotDetailItem>()
 
@@ -474,7 +448,6 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
             tempNewList.remove(item)
         }
 
-
         var simpleName: String
         val deletedOldList = mutableListOf<String>()
         val deletedNewList = mutableListOf<String>()
@@ -484,6 +457,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
             tempOldList.find { it.substringAfterLast(".") == simpleName }?.let {
                 list.add(
                     SnapshotDetailItem(
+                        item,
                         "$it\n$ARROW\n$item",
                         "",
                         MOVED,
@@ -501,6 +475,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
             list.add(
                 SnapshotDetailItem(
                     item,
+                    item,
                     "",
                     REMOVED,
                     type
@@ -510,6 +485,7 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
         for (item in tempNewList) {
             list.add(
                 SnapshotDetailItem(
+                    item,
                     item,
                     "",
                     ADDED,
@@ -523,5 +499,160 @@ class SnapshotViewModel(application: Application) : AndroidViewModel(application
 
     private fun sizeToString(size: Long): String {
         return "${Formatter.formatFileSize(Utils.getApp(), size)} ($size Bytes)"
+    }
+
+    data class CompareDiffNode(
+        var added: Boolean = false,
+        var removed: Boolean = false,
+        var changed: Boolean = false,
+        var moved: Boolean = false
+    )
+
+    private fun compareNativeAndComponentDiff(item: SnapshotDiffItem): CompareDiffNode {
+        val nativeCompareNode = compareNativeDiff(
+            gson.fromJson(
+                item.nativeLibsDiff.old,
+                object : TypeToken<List<LibStringItem>>() {}.type
+            ),
+            gson.fromJson(
+                item.nativeLibsDiff.new,
+                object : TypeToken<List<LibStringItem>>() {}.type
+            )
+        )
+        val servicesCompareNode = compareComponentsDiff(
+            gson.fromJson(
+                item.servicesDiff.old,
+                object : TypeToken<List<String>>() {}.type
+            ),
+            gson.fromJson(
+                item.servicesDiff.new,
+                object : TypeToken<List<String>>() {}.type
+            )
+        )
+        val activitiesCompareNode = compareComponentsDiff(
+            gson.fromJson(
+                item.activitiesDiff.old,
+                object : TypeToken<List<String>>() {}.type
+            ),
+            gson.fromJson(
+                item.activitiesDiff.new,
+                object : TypeToken<List<String>>() {}.type
+            )
+        )
+        val receiversCompareNode = compareComponentsDiff(
+            gson.fromJson(
+                item.receiversDiff.old,
+                object : TypeToken<List<String>>() {}.type
+            ),
+            gson.fromJson(
+                item.receiversDiff.new,
+                object : TypeToken<List<String>>() {}.type
+            )
+        )
+        val providersCompareNode = compareComponentsDiff(
+            gson.fromJson(
+                item.providersDiff.old,
+                object : TypeToken<List<String>>() {}.type
+            ),
+            gson.fromJson(
+                item.providersDiff.new,
+                object : TypeToken<List<String>>() {}.type
+            )
+        )
+
+        val totalNode = CompareDiffNode()
+        totalNode.added =
+            nativeCompareNode.added or servicesCompareNode.added or activitiesCompareNode.added or receiversCompareNode.added or providersCompareNode.added
+        totalNode.removed =
+            nativeCompareNode.removed or servicesCompareNode.removed or activitiesCompareNode.removed or receiversCompareNode.removed or providersCompareNode.removed
+        totalNode.changed =
+            nativeCompareNode.changed or servicesCompareNode.changed or activitiesCompareNode.changed or receiversCompareNode.changed or providersCompareNode.changed
+        totalNode.moved =
+            nativeCompareNode.moved or servicesCompareNode.moved or activitiesCompareNode.moved or receiversCompareNode.moved or providersCompareNode.moved
+
+        return totalNode
+    }
+
+    private fun compareNativeDiff(
+        oldList: List<LibStringItem>,
+        newList: List<LibStringItem>?
+    ): CompareDiffNode {
+        if (newList == null) {
+            return CompareDiffNode(removed = true)
+        }
+
+        val tempOldList = oldList.toMutableList()
+        val tempNewList = newList.toMutableList()
+        val node = CompareDiffNode()
+
+        val iterator = tempNewList.iterator()
+        var nextItem: LibStringItem
+
+        while (iterator.hasNext()) {
+            nextItem = iterator.next()
+            oldList.find { it.name == nextItem.name }?.let {
+                if (it.size != nextItem.size) {
+                    node.changed = true
+                }
+                iterator.remove()
+                tempOldList.remove(tempOldList.find { item -> item.name == nextItem.name })
+            }
+        }
+
+        if (tempOldList.isNotEmpty()) {
+            node.removed = true
+        }
+        if (tempNewList.isNotEmpty()) {
+            node.added = true
+        }
+        return node
+    }
+
+    private fun compareComponentsDiff(
+        oldList: List<String>,
+        newList: List<String>?
+    ): CompareDiffNode {
+        if (newList == null) {
+            return CompareDiffNode(removed = true)
+        }
+
+        val tempOldList = oldList.toMutableList()
+        val tempNewList = newList.toMutableList()
+        val sameList = mutableListOf<String>()
+        val node = CompareDiffNode()
+
+        for (item in tempNewList) {
+            oldList.find { it == item }?.let {
+                sameList.add(item)
+            }
+        }
+
+        for (item in sameList) {
+            tempOldList.remove(item)
+            tempNewList.remove(item)
+        }
+
+        var simpleName: String
+        val deletedOldList = mutableListOf<String>()
+        val deletedNewList = mutableListOf<String>()
+
+        for (item in tempNewList) {
+            simpleName = item.substringAfterLast(".")
+            tempOldList.find { it.substringAfterLast(".") == simpleName }?.let {
+                node.moved = true
+                deletedOldList.add(it)
+                deletedNewList.add(item)
+            }
+        }
+        tempOldList.removeAll(deletedOldList)
+        tempNewList.removeAll(deletedNewList)
+
+        if (tempOldList.isNotEmpty()) {
+            node.removed = true
+        }
+        if (tempNewList.isNotEmpty()) {
+            node.added = true
+        }
+        return node
     }
 }

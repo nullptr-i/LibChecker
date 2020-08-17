@@ -12,18 +12,23 @@ import androidx.core.net.toUri
 import androidx.core.text.HtmlCompat
 import com.absinthe.libchecker.BuildConfig
 import com.absinthe.libchecker.R
+import com.absinthe.libchecker.constant.Constants
 import com.absinthe.libchecker.constant.URLManager
+import com.absinthe.libchecker.utils.Toasty
 import com.absinthe.libchecker.utils.UiUtils
+import com.absinthe.libraries.Absinthe
 import com.blankj.utilcode.util.AppUtils
-import com.blankj.utilcode.util.ToastUtils
 import com.drakeet.about.*
 import com.google.android.material.appbar.AppBarLayout
+import com.microsoft.appcenter.analytics.Analytics
+import com.microsoft.appcenter.analytics.EventProperties
 
 class AboutActivity : AbsAboutActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?, persistentState: PersistableBundle?) {
         super.onCreate(savedInstanceState, persistentState)
         initView()
+        Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_ABOUT", "Entered"))
     }
 
     override fun onCreateHeader(icon: ImageView, slogan: TextView, version: TextView) {
@@ -34,7 +39,7 @@ class AboutActivity : AbsAboutActivity() {
 
     override fun onItemsCreated(items: MutableList<Any>) {
 
-        val hasInstallCoolApk = AppUtils.isAppInstalled("com.coolapk.market")
+        val hasInstallCoolApk = AppUtils.isAppInstalled(Constants.PACKAGE_NAME_COOLAPK)
 
         items.apply {
             add(Category("What's this"))
@@ -42,12 +47,15 @@ class AboutActivity : AbsAboutActivity() {
 
             add(Category("Developers"))
             val developerUrl = if (hasInstallCoolApk) {
-                URLManager.COOLAPK_PAGE
+                URLManager.COOLAPK_HOME_PAGE
             } else {
                 URLManager.GITHUB_PAGE
             }
             add(Contributor(R.mipmap.pic_rabbit, "Absinthe", "Developer & Designer", developerUrl))
             add(Contributor(R.drawable.ic_github, "Source Code", URLManager.GITHUB_REPO_PAGE, URLManager.GITHUB_REPO_PAGE))
+
+            add(Category("Other Works"))
+            addAll(Absinthe.getAboutPageRecommendedApps(this@AboutActivity, BuildConfig.APPLICATION_ID))
 
             add(Category("Acknowledgement"))
             add(Card(
@@ -68,6 +76,7 @@ class AboutActivity : AbsAboutActivity() {
             add(License("Android Jetpack", "Google", License.APACHE_2, "https://source.google.com"))
             add(License("gson", "Google", License.APACHE_2, "https://github.com/google/gson"))
             add(License("material-components-android", "Google", License.APACHE_2, "https://github.com/material-components/material-components-android"))
+            add(License("libraries", "RikkaApps", License.APACHE_2, "https://github.com/RikkaApps/libraries"))
             add(License("lottie-android", "Airbnb", License.APACHE_2, "https://github.com/airbnb/lottie-android"))
             add(License("MPAndroidChart", "PhilJay", License.APACHE_2, "https://github.com/PhilJay/MPAndroidChart"))
             add(License("Once", "jonfinerty", License.APACHE_2, "https://github.com/jonfinerty/Once"))
@@ -77,15 +86,13 @@ class AboutActivity : AbsAboutActivity() {
             add(License("Retrofit", "Square", License.APACHE_2, "https://github.com/square/retrofit"))
             add(License("contour", "Square", License.APACHE_2, "https://github.com/cashapp/contour"))
             add(License("AndResGuard", "shwenzhang", License.APACHE_2, "https://github.com/shwenzhang/AndResGuard"))
-            add(License("libraries", "RikkaApps", License.APACHE_2, "https://github.com/RikkaApps/libraries"))
             add(License("apk-parser", "hsiafan", "BSD-2-Clause", "https://github.com/hsiafan/apk-parser"))
+            add(License("X2C", "iReaderAndroid", License.MIT, "https://github.com/iReaderAndroid/X2C"))
         }
     }
 
     private fun initView() {
-        UiUtils.setDarkMode(this)
-        UiUtils.setSystemBarTransparent(this)
-
+        UiUtils.setSystemBarStyle(this)
         findViewById<AppBarLayout>(com.drakeet.about.R.id.header_layout).fitsSystemWindows = true
     }
 
@@ -103,7 +110,7 @@ class AboutActivity : AbsAboutActivity() {
                 })
             } catch (e: ActivityNotFoundException) {
                 e.printStackTrace()
-                ToastUtils.showLong("There's not existing any app market")
+                Toasty.showLong(this, R.string.toast_not_existing_market)
             }
         }
         return super.onOptionsItemSelected(menuItem)

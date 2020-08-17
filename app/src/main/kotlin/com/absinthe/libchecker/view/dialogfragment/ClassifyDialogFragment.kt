@@ -3,15 +3,15 @@ package com.absinthe.libchecker.view.dialogfragment
 import android.app.Dialog
 import android.os.Bundle
 import android.view.View
+import androidx.appcompat.app.AlertDialog
+import androidx.fragment.app.DialogFragment
 import com.absinthe.libchecker.bean.AppItem
 import com.absinthe.libchecker.view.ClassifyDialogView
-import com.absinthe.libchecker.view.LCDialogFragment
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 const val EXTRA_TITLE = "EXTRA_TITLE"
 const val EXTRA_ITEM_LIST = "EXTRA_ITEM_LIST"
 
-class ClassifyDialogFragment : LCDialogFragment() {
+class ClassifyDialogFragment : DialogFragment() {
 
     var item: ArrayList<AppItem> = ArrayList()
     private val dialogView by lazy { ClassifyDialogView(requireContext()) }
@@ -29,7 +29,7 @@ class ClassifyDialogFragment : LCDialogFragment() {
             dialogView.adapter.setList(item)
         }
 
-        return MaterialAlertDialogBuilder(requireContext())
+        return AlertDialog.Builder(requireContext())
             .setTitle(dialogTitle)
             .setView(dialogView)
             .create()

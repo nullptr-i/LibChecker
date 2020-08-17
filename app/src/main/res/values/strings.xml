@@ -13,7 +13,8 @@
     <string name="string_64_bit">64bit</string>
     <string name="string_32_bit">32bit</string>
     <string name="no_libs">No native libs</string>
-    <string name="format_native_libs_title">Native libs in <b>%s</b></string>
+    <string name="cannot_read">Can\'t read</string>
+    <string name="unknown">Unknown</string>
     <string name="empty_list">Empty list</string>
     <string name="applist_first_tip">The first load will take some time</string>
 
@@ -34,12 +35,15 @@
     <string name="ref_category_activity">Activities</string>
     <string name="ref_category_br">Broadcast Receivers</string>
     <string name="ref_category_cp">Content Providers</string>
+    <string name="ref_category_dex" translatable="false">Dex</string>
 
     <string name="string_kotlin_used">Kotlin Used</string>
     <string name="string_kotlin_unused">Kotlin Unused</string>
 
     <!--  About  -->
     <string name="settings_about">About</string>
+    <string name="settings_rate_us">Rate us</string>
+    <string name="settings_rate_us_summary">This can make us discover by more people</string>
     <string name="settings_about_summary">This is LibChecker!</string>
     <string name="about_info">This app is used to view the third-party libraries used by applications in your device.</string>
     <string name="toolbar_rate">Rate</string>
@@ -55,26 +59,31 @@
     <string name="colorful_icon">Colorful Icon</string>
     <string name="rules_repo_title">Rules Repo</string>
     <string name="lib_ref_threshold">Library Reference Threshold</string>
+    <string name="help_docs">Help Docs</string>
 
     <string name="show_system_apps_summary">Control whether display system apps in apps list</string>
     <string name="entry_animation_summary">Play animation when opening and closing detail page</string>
     <string name="apk_analytics_summary">Open the detail page when click an APK file</string>
     <string name="colorful_icon_summary">Part of the marked libraries will appear as a colored logo</string>
     <string name="lib_ref_threshold_summary">Only libraries with the number of library references reaching the threshold are displayed in the list</string>
+    <string name="help_docs_summary">Learn how to use LibChecker</string>
 
     <!--  Detail  -->
     <string name="detail_label">View App Details</string>
     <string name="not_found">Not found</string>
     <string name="create_an_issue">Assist us to supplement the information</string>
-    <string name="splits_spk" translatable="false">Splits APK</string>
-    <string name="kotlin_used" translatable="false">Kotlin Used</string>
+    <string name="split_spk" translatable="false">Split APKs</string>
+    <string name="kotlin_used" translatable="false">Kotlin used</string>
 
     <!--  Toast  -->
     <string name="toast_copied_to_clipboard">Copied to clipboard</string>
+    <string name="toast_not_existing_market">There\'s not existing any app market</string>
+    <string name="toast_use_another_file_manager">Please use another File Manager to open the APK</string>
+    <string name="toast_cant_open_app">Can\'t open this app</string>
+    <string name="toast_package_name_null">Package name is null</string>
 
     <!--  Snapshot  -->
     <string name="snapshot_btn_save_current">Save current snapshot</string>
-    <string name="snapshot_btn_saving">Saving a snapshot</string>
     <string name="snapshot_current_timestamp">Current Snapshot Timestamp</string>
     <string name="snapshot_apps_count">Count of Applications in Snapshot</string>
     <string name="snapshot_indicator_added">Added</string>

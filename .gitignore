@@ -86,3 +86,7 @@ app/.project
 .project
 .settings/org.eclipse.buildship.core.prefs
 app/.settings/org.eclipse.buildship.core.prefs
+.idea/render.experimental.xml
+.idea/kotlinc.xml
+.idea/codeStyles/codeStyleConfig.xml
+.idea/jarRepositories.xml

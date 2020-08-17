@@ -9,6 +9,7 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.RecyclerView
 import com.absinthe.libchecker.R
+import com.absinthe.libchecker.constant.Constants
 import com.absinthe.libchecker.constant.GlobalValues
 import com.absinthe.libchecker.databinding.FragmentSnapshotBinding
 import com.absinthe.libchecker.databinding.LayoutSnapshotDashboardBinding
@@ -17,10 +18,13 @@ import com.absinthe.libchecker.ui.detail.EXTRA_ENTITY
 import com.absinthe.libchecker.ui.detail.SnapshotDetailActivity
 import com.absinthe.libchecker.ui.fragment.BaseFragment
 import com.absinthe.libchecker.ui.main.MainActivity
+import com.absinthe.libchecker.utils.AntiShakeUtils
 import com.absinthe.libchecker.utils.UiUtils
 import com.absinthe.libchecker.viewmodel.SnapshotViewModel
 import com.blankj.utilcode.util.BarUtils
 import com.blankj.utilcode.util.ConvertUtils
+import com.microsoft.appcenter.analytics.Analytics
+import com.microsoft.appcenter.analytics.EventProperties
 import rikka.material.widget.BorderView
 import java.text.SimpleDateFormat
 import java.util.*
@@ -45,9 +49,19 @@ class SnapshotFragment : BaseFragment<FragmentSnapshotBinding>(R.layout.fragment
                         ConvertUtils.dp2px(16f) + paddingBottom
                     )
                 setOnClickListener {
+                    if (AntiShakeUtils.isInvalidClick(it)) {
+                        return@setOnClickListener
+                    }
+
                     vfContainer.displayedChild = 0
                     hide()
-                    viewModel.computeSnapshots(requireContext())
+                    viewModel.computeSnapshots()
+                    Analytics.trackEvent(Constants.Event.SNAPSHOT_CLICK, EventProperties().set("Action", "Click to Save"))
+                }
+                setOnLongClickListener {
+                    hide()
+                    Analytics.trackEvent(Constants.Event.SNAPSHOT_CLICK, EventProperties().set("Action", "Long Click to Hide"))
+                    true
                 }
             }
             recyclerview.apply {
@@ -61,9 +75,9 @@ class SnapshotFragment : BaseFragment<FragmentSnapshotBinding>(R.layout.fragment
                     override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                         super.onScrolled(recyclerView, dx, dy)
                         //dy less than zero means swiping up
-                        if (dy > 0 && binding.extendedFab.isShown) {
+                        if (dy > 10 && binding.extendedFab.isShown) {
                             binding.extendedFab.hide()
-                        } else if (dy < 0 && !binding.extendedFab.isShown) {
+                        } else if (dy < -10 && !binding.extendedFab.isShown) {
                             binding.extendedFab.show()
                         }
                     }
@@ -86,6 +100,10 @@ class SnapshotFragment : BaseFragment<FragmentSnapshotBinding>(R.layout.fragment
             setEmptyView(R.layout.layout_snapshot_empty_view)
             setHeaderView(dashboardBinding.root)
             setOnItemClickListener { _, view, position ->
+                if (AntiShakeUtils.isInvalidClick(view)) {
+                    return@setOnItemClickListener
+                }
+
                 val intent = Intent(requireActivity(), SnapshotDetailActivity::class.java).apply {
                     putExtras(Bundle().apply {
                         putSerializable(EXTRA_ENTITY, getItem(position))
@@ -93,9 +111,7 @@ class SnapshotFragment : BaseFragment<FragmentSnapshotBinding>(R.layout.fragment
                 }
 
                 val options = ActivityOptions.makeSceneTransitionAnimation(
-                    requireActivity(),
-                    view,
-                    "app_card_container"
+                    requireActivity(), view, view.transitionName
                 )
 
                 if (GlobalValues.isShowEntryAnimation.value!!) {
@@ -118,13 +134,15 @@ class SnapshotFragment : BaseFragment<FragmentSnapshotBinding>(R.layout.fragment
             })
             snapshotItems.observe(viewLifecycleOwner, androidx.lifecycle.Observer {
                 dashboardBinding.tvSnapshotAppsCountText.text = it.size.toString()
-                computeDiff(requireContext())
+                computeDiff()
             })
             snapshotDiffItems.observe(
                 viewLifecycleOwner,
                 androidx.lifecycle.Observer { list ->
                     adapter.setList(list.sortedByDescending { it.updateTime })
-                    binding.vfContainer.displayedChild = 1
+                    if (binding.vfContainer.displayedChild == 0) {
+                        binding.vfContainer.displayedChild = 1
+                    }
                     binding.extendedFab.show()
                 })
         }

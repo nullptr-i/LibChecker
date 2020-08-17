@@ -10,13 +10,15 @@ import android.view.ViewGroup
 import android.view.Window
 import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
+import com.absinthe.libchecker.constant.Constants
 import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.constant.OnceTag
+import com.absinthe.libchecker.constant.librarymap.*
 import com.absinthe.libchecker.databinding.ActivityMainBinding
 import com.absinthe.libchecker.ktx.setCurrentItem
 import com.absinthe.libchecker.ui.fragment.SettingsFragment
@@ -26,7 +28,8 @@ import com.absinthe.libchecker.ui.fragment.statistics.StatisticsFragment
 import com.absinthe.libchecker.viewmodel.AppViewModel
 import com.absinthe.libchecker.viewmodel.SnapshotViewModel
 import com.google.android.material.transition.platform.MaterialContainerTransformSharedElementCallback
-import jonathanfinerty.once.Once
+import com.microsoft.appcenter.analytics.Analytics
+import com.microsoft.appcenter.analytics.EventProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -35,6 +38,7 @@ const val PAGE_TRANSFORM_DURATION = 300L
 
 class MainActivity : BaseActivity() {
 
+    var hasInit = false
     private lateinit var binding: ActivityMainBinding
     private var clickBottomItemFlag = false
     private val appViewModel by viewModels<AppViewModel>()
@@ -45,8 +49,7 @@ class MainActivity : BaseActivity() {
                 intent.action == Intent.ACTION_PACKAGE_REMOVED ||
                 intent.action == Intent.ACTION_PACKAGE_REPLACED
             ) {
-                appViewModel.requestChange(this@MainActivity)
-                snapshotViewModel.computeDiff(this@MainActivity)
+                GlobalValues.shouldRequestChange.value = true
             }
         }
     }
@@ -66,18 +69,20 @@ class MainActivity : BaseActivity() {
 
         initView()
         registerPackageBroadcast()
+        handleIntentFromShortcuts(intent)
+        initMap()
+    }
 
-        if (!Once.beenDone(Once.THIS_APP_VERSION, OnceTag.HAS_COLLECT_LIB)) {
-            appViewModel.collectPopularLibraries(this)
-            Once.markDone(OnceTag.HAS_COLLECT_LIB)
-        }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntentFromShortcuts(intent)
     }
 
     override fun onResume() {
         super.onResume()
-        if (GlobalValues.shouldRequestChange) {
-            appViewModel.requestChange(this)
-            snapshotViewModel.computeDiff(this)
+        if (GlobalValues.shouldRequestChange.value == true && hasInit) {
+            appViewModel.requestChange()
+            snapshotViewModel.computeDiff()
         }
     }
 
@@ -164,6 +169,15 @@ class MainActivity : BaseActivity() {
                 true
             }
         }
+
+        GlobalValues.shouldRequestChange.observe(this, Observer {
+            if (it) {
+                if (hasInit) {
+                    appViewModel.requestChange()
+                }
+                snapshotViewModel.computeDiff()
+            }
+        })
     }
 
     private fun registerPackageBroadcast() {
@@ -179,5 +193,23 @@ class MainActivity : BaseActivity() {
 
     private fun unregisterPackageBroadcast() {
         unregisterReceiver(requestPackageReceiver)
+    }
+
+    private fun handleIntentFromShortcuts(intent: Intent) {
+        when(intent.action) {
+            Constants.ACTION_APP_LIST -> binding.viewpager.setCurrentItem(0, false)
+            Constants.ACTION_STATISTICS -> binding.viewpager.setCurrentItem(1, false)
+            Constants.ACTION_SNAPSHOT -> binding.viewpager.setCurrentItem(2, false)
+        }
+        Analytics.trackEvent(Constants.Event.LAUNCH_ACTION, EventProperties().set("Action", intent.action))
+    }
+
+    private fun initMap() = lifecycleScope.launch(Dispatchers.IO) {
+        NativeLibMap
+        ServiceLibMap
+        ActivityLibMap
+        ReceiverLibMap
+        ProviderLibMap
+        DexLibMap
     }
 }

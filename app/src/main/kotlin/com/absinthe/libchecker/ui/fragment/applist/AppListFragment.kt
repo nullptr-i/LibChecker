@@ -27,11 +27,11 @@ import com.absinthe.libchecker.databinding.FragmentAppListBinding
 import com.absinthe.libchecker.recyclerview.adapter.AppAdapter
 import com.absinthe.libchecker.recyclerview.diff.AppListDiffUtil
 import com.absinthe.libchecker.ui.detail.AppDetailActivity
+import com.absinthe.libchecker.ui.detail.EXTRA_PACKAGE_NAME
 import com.absinthe.libchecker.ui.fragment.BaseFragment
 import com.absinthe.libchecker.ui.main.MainActivity
 import com.absinthe.libchecker.utils.AntiShakeUtils
 import com.absinthe.libchecker.utils.SPUtils
-import com.absinthe.libchecker.view.EXTRA_PKG_NAME
 import com.absinthe.libchecker.viewmodel.AppViewModel
 import com.blankj.utilcode.util.BarUtils
 import jonathanfinerty.once.Once
@@ -46,6 +46,9 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
 
     private val viewModel by activityViewModels<AppViewModel>()
     private val mAdapter = AppAdapter()
+    private var hasInit = false
+    private var isListInit = false
+    private var menu: Menu? = null
 
     override fun initBinding(view: View): FragmentAppListBinding = FragmentAppListBinding.bind(view)
 
@@ -60,14 +63,12 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
 
                 val intent = Intent(requireActivity(), AppDetailActivity::class.java).apply {
                     putExtras(Bundle().apply {
-                        putString(EXTRA_PKG_NAME, mAdapter.getItem(position).packageName)
+                        putString(EXTRA_PACKAGE_NAME, mAdapter.getItem(position).packageName)
                     })
                 }
 
                 val options = ActivityOptions.makeSceneTransitionAnimation(
-                    requireActivity(),
-                    view,
-                    "app_card_container"
+                    requireActivity(), view, view.transitionName
                 )
 
                 if (GlobalValues.isShowEntryAnimation.value!!) {
@@ -106,11 +107,21 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
 
         viewModel.apply {
             if (!Once.beenDone(Once.THIS_APP_INSTALL, OnceTag.FIRST_LAUNCH)) {
-                initItems(requireContext())
+                initItems()
             } else {
                 dbItems.observe(viewLifecycleOwner, Observer {
                     if (it.isNullOrEmpty()) {
-                        initItems(requireContext())
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            delay(500)
+                            if (dbItems.value.isNullOrEmpty()) {
+                                initItems()
+                            } else {
+                                if (!viewModel.refreshLock) {
+                                    viewModel.refreshLock = true
+                                    addItem()
+                                }
+                            }
+                        }
                     } else {
                         if (!viewModel.refreshLock) {
                             viewModel.refreshLock = true
@@ -123,9 +134,10 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
             AppItemRepository.allItems.observe(viewLifecycleOwner, Observer {
                 updateItems(it)
 
-                if (!isInit) {
-                    requestChange(requireContext())
-                    isInit = true
+                if (!hasInit) {
+                    viewModel.requestChange()
+                    hasInit = true
+                    (requireActivity() as MainActivity).hasInit = true
                 }
 
                 if (!Once.beenDone(Once.THIS_APP_INSTALL, OnceTag.FIRST_LAUNCH)) {
@@ -140,9 +152,7 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
 
         GlobalValues.apply {
             isShowSystemApps.observe(viewLifecycleOwner, Observer {
-                if (viewModel.isInit) {
-                    viewModel.addItem()
-                }
+                viewModel.addItem()
             })
             appSortMode.observe(viewLifecycleOwner, Observer { mode ->
                 AppItemRepository.allItems.value?.let { allItems ->
@@ -160,6 +170,7 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
         inflater.inflate(R.menu.app_list_menu, menu)
+        this.menu = menu
 
         val searchView = SearchView(requireContext()).apply {
             setIconifiedByDefault(false)
@@ -175,6 +186,10 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
         menu.findItem(R.id.search).apply {
             setShowAsAction(MenuItem.SHOW_AS_ACTION_COLLAPSE_ACTION_VIEW or MenuItem.SHOW_AS_ACTION_IF_ROOM)
             actionView = searchView
+
+            if (!isListInit) {
+                isVisible = false
+            }
         }
         super.onCreateOptionsMenu(menu, inflater)
     }
@@ -215,7 +230,6 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
                     }
                     GlobalValues.appSortMode.value = mode
                     SPUtils.putInt(Constants.PREF_APP_SORT_MODE, mode)
-
                     true
                 }
 
@@ -243,6 +257,9 @@ class AppListFragment : BaseFragment<FragmentAppListBinding>(R.layout.fragment_a
                         if (GlobalValues.appSortMode.value!! == Constants.SORT_MODE_UPDATE_TIME_DESC) {
                             returnTopOfList()
                         }
+
+                        menu?.findItem(R.id.search)?.isVisible = true
+                        isListInit = true
                     } catch (ignore: Exception) {
 
                     }
