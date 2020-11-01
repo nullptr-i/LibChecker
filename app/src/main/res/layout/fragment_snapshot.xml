@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -18,6 +17,7 @@
             android:paddingTop="?actionBarSize">
 
             <com.airbnb.lottie.LottieAnimationView
+                android:id="@+id/loading"
                 android:layout_width="300dp"
                 android:layout_height="300dp"
                 app:lottie_autoPlay="true"
@@ -31,14 +31,12 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:clipToPadding="false"
-            android:paddingHorizontal="@dimen/normal_padding"
             android:paddingTop="?actionBarSize"
             android:scrollbarAlwaysDrawVerticalTrack="false"
             android:scrollbars="none"
             app:borderBottomStyle="never"
             app:borderTopDrawable="@null"
-            app:borderTopStyle="whenTop"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+            app:borderTopStyle="whenTop" />
 
     </ViewFlipper>
 
@@ -46,9 +44,9 @@
         android:id="@+id/extended_fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|right"
         android:text="@string/snapshot_btn_save_current"
         app:icon="@drawable/ic_outline_save"
-        tools:ignore="RtlHardcoded" />
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

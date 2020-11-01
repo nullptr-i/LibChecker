@@ -4,12 +4,23 @@ object Constants {
 
     const val APP_CENTER_SECRET = "5f11b856-0a27-4438-a038-9e18e4797133"
 
+    const val ERROR = -1
+    const val ARMV8 = 0
+    const val ARMV7 = 1
+    const val ARMV5 = 2
+    const val NO_LIBS = 3
+
+    const val ARMV8_STRING = "arm64-v8a"
+    const val ARMV7_STRING = "armeabi-v7a"
+    const val ARMV5_STRING = "armeabi"
+
     const val PREF_SHOW_SYSTEM_APPS = "showSystemApps"
     const val PREF_ENTRY_ANIMATION = "entryAnimation"
     const val PREF_APK_ANALYTICS = "apkAnalytics"
     const val PREF_RULES_REPO = "rulesRepository"
     const val PREF_COLORFUL_ICON = "colorfulIcon"
     const val PREF_LIB_REF_THRESHOLD = "libRefThreshold"
+    const val PREF_RELOAD_APPS = "reloadApps"
     const val PREF_ABOUT = "about"
     const val PREF_HELP = "help"
     const val PREF_RATE = "rate"
@@ -17,6 +28,9 @@ object Constants {
     const val PREF_APP_SORT_MODE = "appSortMode"
     const val PREF_LIB_SORT_MODE = "libSortMode"
     const val PREF_SNAPSHOT_TIMESTAMP = "snapshotTimestamp"
+
+    const val PREF_LOCAL_BACKUP = "localBackup"
+    const val PREF_LOCAL_RESTORE = "localRestore"
 
     const val SORT_MODE_UPDATE_TIME_DESC = 0
     const val SORT_MODE_DEFAULT = 1
@@ -30,10 +44,15 @@ object Constants {
 
     const val PACKAGE_NAME_COOLAPK = "com.coolapk.market"
 
+    const val REQUEST_CODE_BACKUP = 1001
+    const val REQUEST_CODE_RESTORE_BACKUP = 1002
+
     object Event {
         const val LAUNCH_ACTION = "Launch Action"
         const val SNAPSHOT_CLICK = "Snapshot Click"
         const val SETTINGS = "Settings"
         const val LIB_REFERENCE_FILTER_TYPE = "Lib Reference Filter Type"
+        const val EASTER_EGG = "Easter Egg"
+        const val SNAPSHOT_DETAIL_COMPONENT_COUNT = "Snapshot Detail Component Count"
     }
 }

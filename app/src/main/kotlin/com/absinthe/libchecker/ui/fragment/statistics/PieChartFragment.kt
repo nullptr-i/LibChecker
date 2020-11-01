@@ -4,14 +4,18 @@ import android.graphics.Color
 import android.util.Log
 import android.view.View
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Observer
+import androidx.fragment.app.activityViewModels
 import com.absinthe.libchecker.R
-import com.absinthe.libchecker.bean.*
+import com.absinthe.libchecker.constant.Constants.ARMV5
+import com.absinthe.libchecker.constant.Constants.ARMV7
+import com.absinthe.libchecker.constant.Constants.ARMV8
+import com.absinthe.libchecker.constant.Constants.NO_LIBS
 import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.database.AppItemRepository
+import com.absinthe.libchecker.database.entity.LCItem
 import com.absinthe.libchecker.databinding.FragmentPieChartBinding
 import com.absinthe.libchecker.ui.fragment.BaseFragment
 import com.absinthe.libchecker.view.dialogfragment.ClassifyDialogFragment
+import com.absinthe.libchecker.viewmodel.LibReferenceViewModel
 import com.github.mikephil.charting.components.Legend
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.PieData
@@ -32,6 +36,7 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
     MaterialButtonToggleGroup.OnButtonCheckedListener {
 
     private var pieType = TYPE_ABI
+    private val viewModel by activityViewModels<LibReferenceViewModel>()
 
     override fun initBinding(view: View): FragmentPieChartBinding =
         FragmentPieChartBinding.bind(view)
@@ -52,7 +57,7 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
             setUsePercentValues(true)
             setExtraOffsets(5f, 10f, 5f, 5f)
             setEntryLabelColor(Color.BLACK)
-            setNoDataText(getString(R.string.chart_no_data_text))
+            setNoDataText(getString(R.string.loading))
             setNoDataTextColor(ContextCompat.getColor(context, R.color.textNormal))
             setOnChartValueSelectedListener(this@PieChartFragment)
             setHoleColor(Color.TRANSPARENT)
@@ -63,11 +68,11 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
             check(R.id.btn_abi)
         }
 
-        AppItemRepository.allItems.observe(viewLifecycleOwner, Observer {
+        viewModel.dbItems.observe(viewLifecycleOwner, {
             setAbiData()
         })
 
-        GlobalValues.isShowSystemApps.observe(viewLifecycleOwner, Observer {
+        GlobalValues.isShowSystemApps.observe(viewLifecycleOwner, {
             setAbiData()
         })
     }
@@ -80,13 +85,13 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
         )
         val entries: ArrayList<PieEntry> = ArrayList()
 
-        AppItemRepository.allItems.value?.let {
+        viewModel.dbItems.value?.let {
             val list = mutableListOf(0, 0, 0)
 
             for (item in it) {
                 when (item.abi) {
-                    ARMV8 -> list[0]++
-                    ARMV5, ARMV7 -> list[1]++
+                    ARMV8.toShort() -> list[0]++
+                    ARMV5.toShort(), ARMV7.toShort() -> list[1]++
                     else -> list[2]++
                 }
             }
@@ -138,7 +143,7 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
         )
         val entries: ArrayList<PieEntry> = ArrayList()
 
-        AppItemRepository.allItems.value?.let {
+        viewModel.dbItems.value?.let {
             val list = mutableListOf(0, 0)
 
             for (item in it) {
@@ -197,7 +202,7 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
         if (h == null) return
 
         var dialogTitle = ""
-        var item: List<AppItem> = listOf()
+        var item: List<LCItem> = listOf()
 
         if (pieType == TYPE_ABI) {
             when (h.x) {
@@ -206,7 +211,7 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
                         getString(R.string.title_statistics_dialog),
                         getString(R.string.string_64_bit)
                     )
-                    AppItemRepository.allItems.value?.filter { it.abi == ARMV8 }
+                    viewModel.dbItems.value?.filter { it.abi == ARMV8.toShort() }
                         ?.let { filter ->
                             item = ArrayList(filter)
                         }
@@ -216,14 +221,14 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
                         getString(R.string.title_statistics_dialog),
                         getString(R.string.string_32_bit)
                     )
-                    AppItemRepository.allItems.value?.filter { it.abi == ARMV7 || it.abi == ARMV5 }
+                    viewModel.dbItems.value?.filter { it.abi == ARMV7.toShort() || it.abi == ARMV5.toShort() }
                         ?.let { filter ->
                             item = ArrayList(filter)
                         }
                 }
                 2f -> {
                     dialogTitle = getString(R.string.title_statistics_dialog_no_native_libs)
-                    AppItemRepository.allItems.value?.filter { it.abi == NO_LIBS }
+                    viewModel.dbItems.value?.filter { it.abi == NO_LIBS.toShort() }
                         ?.let { filter ->
                             item = ArrayList(filter)
                         }
@@ -233,14 +238,14 @@ class PieChartFragment : BaseFragment<FragmentPieChartBinding>(R.layout.fragment
             when (h.x) {
                 0f -> {
                     dialogTitle = getString(R.string.string_kotlin_used)
-                    AppItemRepository.allItems.value?.filter { it.isKotlinUsed }
+                    viewModel.dbItems.value?.filter { it.isKotlinUsed }
                         ?.let { filter ->
                             item = ArrayList(filter)
                         }
                 }
                 1f -> {
                     dialogTitle = getString(R.string.string_kotlin_unused)
-                    AppItemRepository.allItems.value?.filter { !it.isKotlinUsed }
+                    viewModel.dbItems.value?.filter { !it.isKotlinUsed }
                         ?.let { filter ->
                             item = ArrayList(filter)
                         }

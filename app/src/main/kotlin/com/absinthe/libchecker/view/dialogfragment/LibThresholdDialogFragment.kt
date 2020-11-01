@@ -14,18 +14,15 @@ import com.microsoft.appcenter.analytics.EventProperties
 
 class LibThresholdDialogFragment : DialogFragment() {
 
-    private val dialogView by lazy {
-        LibReferenceThresholdView(
-            requireContext()
-        )
-    }
-
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+
+        val view = LibReferenceThresholdView(requireContext())
+
         return AlertDialog.Builder(requireContext())
-            .setView(dialogView)
+            .setView(view)
             .setTitle(R.string.lib_ref_threshold)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                val threshold = dialogView.slider.value.toInt()
+                val threshold = view.slider.value.toInt()
                 GlobalValues.libReferenceThreshold.value = threshold
                 SPUtils.putInt(Constants.PREF_LIB_REF_THRESHOLD, threshold)
                 Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_LIB_REF_THRESHOLD", threshold.toLong()))

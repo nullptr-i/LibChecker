@@ -1,12 +1,14 @@
 package com.absinthe.libchecker.recyclerview.adapter
 
-import android.graphics.PorterDuff
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.view.ViewGroup
 import android.widget.ImageButton
-import androidx.core.content.ContextCompat
+import coil.load
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.bean.LibReference
 import com.absinthe.libchecker.constant.GlobalValues
+import com.absinthe.libchecker.extensions.valueUnsafe
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.viewholder.BaseViewHolder
 import com.zhangyue.we.x2c.X2C
@@ -28,19 +30,16 @@ class LibReferenceAdapter : BaseQuickAdapter<LibReference, BaseViewHolder>(0) {
 
         item.chip?.let {
             holder.getView<ImageButton>(R.id.iv_icon).apply {
-                setImageResource(it.iconRes)
+                load(it.iconRes)
 
-                if (!GlobalValues.isColorfulIcon.value!!) {
-                    setColorFilter(
-                        ContextCompat.getColor(context, R.color.textNormal),
-                        PorterDuff.Mode.SRC_IN
-                    )
+                if (!GlobalValues.isColorfulIcon.valueUnsafe) {
+                    colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
                 }
             }
 
             holder.setText(R.id.tv_label_name, it.name)
         } ?: let {
-            holder.setImageResource(R.id.iv_icon, R.drawable.ic_question)
+            holder.getView<ImageButton>(R.id.iv_icon).load(R.drawable.ic_question)
             holder.setText(R.id.tv_label_name, R.string.not_marked_lib)
         }
 

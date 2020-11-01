@@ -23,6 +23,14 @@ object ProviderLibMap : BaseMap() {
             LibChip(R.drawable.ic_lib_huawei, "Huawei Push")
         ),
         Pair(
+            "com.huawei.hms.aaid.InitProvider",
+            LibChip(R.drawable.ic_lib_huawei, "HMS Core AAID")
+        ),
+        Pair(
+            "com.huawei.openalliance.ad.download.DownloadFileProvider",
+            LibChip(R.drawable.ic_lib_huawei, "Huawei Ads SDK")
+        ),
+        Pair(
             "androidx.core.content.FileProvider",
             LibChip(R.drawable.ic_android_outline, "File Provider")
         ),
@@ -84,7 +92,7 @@ object ProviderLibMap : BaseMap() {
         ),
         Pair(
             "com.bytedance.sdk.openadsdk.multipro.TTMultiProvider",
-            LibChip(R.drawable.ic_lib_toutiao, "头条广告 SDK")
+            LibChip(R.drawable.ic_lib_bytedance, "Pangle SDK")
         ),
         Pair(
             "cn.jpush.android.service.DataProvider",
@@ -96,39 +104,51 @@ object ProviderLibMap : BaseMap() {
         ),
         Pair(
             "com.tencent.android.tpush.XGPushProvider",
-            LibChip(R.drawable.ic_lib_tencent, "信鸽推送")
+            LibChip(R.drawable.ic_lib_tencent_cloud, "腾讯移动推送")
         ),
         Pair(
             "com.tencent.android.tpush.SettingsContentProvider",
-            LibChip(R.drawable.ic_lib_tencent, "信鸽推送")
+            LibChip(R.drawable.ic_lib_tencent_cloud, "腾讯移动推送")
+        ),
+        Pair(
+            "com.tencent.android.tpush.XGVipPushKAProvider",
+            LibChip(R.drawable.ic_lib_tencent_cloud, "腾讯移动推送")
+        ),
+        Pair(
+            "com.tencent.tpns.baseapi.base.SettingsContentProvider",
+            LibChip(R.drawable.ic_lib_tencent_cloud, "腾讯移动推送")
         ),
         Pair(
             "com.igexin.download.DownloadProvider",
-            LibChip(R.drawable.ic_question, "个推")
+            LibChip(R.drawable.ic_sdk_placeholder, "个推")
         ),
         Pair(
             "com.squareup.picasso.PicassoProvider",
-            LibChip(R.drawable.ic_question, "Picasso")
+            LibChip(R.drawable.ic_sdk_placeholder, "Picasso")
         ),
         Pair(
             "com.blankj.utilcode.util.UtilsFileProvider",
-            LibChip(R.drawable.ic_question, "AndroidUtilCode")
+            LibChip(R.drawable.ic_sdk_placeholder, "AndroidUtilCode")
         ),
         Pair(
             "com.blankj.utilcode.util.Utils\$FileProvider4UtilCode",
-            LibChip(R.drawable.ic_question, "AndroidUtilCode")
+            LibChip(R.drawable.ic_sdk_placeholder, "AndroidUtilCode")
         ),
         Pair(
             "com.bytedance.sdk.openadsdk.TTFileProvider",
-            LibChip(R.drawable.ic_lib_toutiao, "头条广告 SDK")
+            LibChip(R.drawable.ic_lib_bytedance, "Pangle SDK")
         ),
         Pair(
             "com.liulishuo.okdownload.OkDownloadProvider",
-            LibChip(R.drawable.ic_question, "OkDownload")
+            LibChip(R.drawable.ic_sdk_placeholder, "OkDownload")
         ),
         Pair(
             "com.netease.nimlib.ipc.NIMContentProvider",
             LibChip(R.drawable.ic_lib_netease, "网易云通信 SDK")
+        ),
+        Pair(
+            "com.qiyukf.nim.uikit.provider.UnicornProvider",
+            LibChip(R.drawable.ic_lib_netease, "七鱼 SDK")
         ),
         Pair(
             "com.sensorsdata.analytics.android.sdk.data.SensorsDataContentProvider",
@@ -148,7 +168,7 @@ object ProviderLibMap : BaseMap() {
         ),
         Pair(
             "cn.bmob.v3.util.BmobContentProvider",
-            LibChip(R.drawable.ic_question, "Bmob 后端云")
+            LibChip(R.drawable.ic_sdk_placeholder, "Bmob 后端云")
         ),
         Pair(
             "moe.shizuku.api.ShizukuProvider",
@@ -156,21 +176,43 @@ object ProviderLibMap : BaseMap() {
         ),
         Pair(
             "com.yanzhenjie.permission.FileProvider",
-            LibChip(R.drawable.ic_question, "AndPermission")
+            LibChip(R.drawable.ic_sdk_placeholder, "AndPermission")
         ),
         Pair(
             "com.just.agentweb.AgentWebFileProvider",
-            LibChip(R.drawable.ic_question, "AgentWeb")
-        )
+            LibChip(R.drawable.ic_sdk_placeholder, "AgentWeb")
+        ),
+        Pair(
+            "com.baidu.android.pushservice.PushInfoProvider",
+            LibChip(R.drawable.ic_lib_baidu, "百度云推送")
+        ),
+        Pair(
+            "com.baidu.mobads.openad.FileProvider",
+            LibChip(R.drawable.ic_lib_baidu, "移动应用推广 SDK")
+        ),
+        Pair(
+            "me.jessyan.autosize.InitProvider",
+            LibChip(R.drawable.ic_sdk_placeholder, "AndroidAutoSize")
+        ),
+        Pair(
+            "com.qihoo360.mobilesafe.svcmanager.ServiceProvider",
+            LibChip(R.drawable.ic_lib_360, "RePlugin")
+        ),
+        Pair(
+            "cn.sharesdk.framework.utils.ShareSDKFileProvider",
+            LibChip(R.drawable.ic_sdk_placeholder, "ShareSDK")
+        ),
     )
 
     override fun getMap(): HashMap<String, LibChip> {
         return MAP
     }
 
+    private val PATTERN_REPLUGIN = Pattern.compile("com.qihoo360.replugin.(.*)")
+
     override fun findRegex(name: String): LibChip? {
         return when {
-            Pattern.matches("com.qihoo360.replugin.(.*)", name) -> LibChip(R.drawable.ic_lib_360, "RePlugin", "regex_replugin")
+            PATTERN_REPLUGIN.matcher(name).matches() -> LibChip(R.drawable.ic_lib_360, "RePlugin", "regex_replugin")
             else -> null
         }
     }

@@ -5,21 +5,24 @@ import android.content.res.Configuration
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import androidx.activity.viewModels
-import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import coil.load
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
-import com.absinthe.libchecker.constant.*
+import com.absinthe.libchecker.annotation.*
+import com.absinthe.libchecker.constant.GlobalValues
 import com.absinthe.libchecker.database.LCDatabase
 import com.absinthe.libchecker.database.LCRepository
 import com.absinthe.libchecker.databinding.ActivityAppDetailBinding
-import com.absinthe.libchecker.databinding.LayoutChipGroupBinding
-import com.absinthe.libchecker.ktx.setLongClickCopiedToClipboard
+import com.absinthe.libchecker.extensions.finishCompat
+import com.absinthe.libchecker.extensions.setLongClickCopiedToClipboard
+import com.absinthe.libchecker.extensions.valueUnsafe
 import com.absinthe.libchecker.ui.fragment.applist.ComponentsAnalysisFragment
 import com.absinthe.libchecker.ui.fragment.applist.NativeAnalysisFragment
 import com.absinthe.libchecker.ui.fragment.applist.Sortable
@@ -27,7 +30,6 @@ import com.absinthe.libchecker.utils.PackageUtils
 import com.absinthe.libchecker.utils.Toasty
 import com.absinthe.libchecker.viewmodel.DetailViewModel
 import com.blankj.utilcode.util.AppUtils
-import com.blankj.utilcode.util.BarUtils
 import com.blankj.utilcode.util.IntentUtils
 import com.google.android.material.tabs.TabLayoutMediator
 import com.google.android.material.transition.platform.MaterialContainerTransform
@@ -38,13 +40,16 @@ import kotlinx.coroutines.withContext
 
 const val EXTRA_PACKAGE_NAME = "android.intent.extra.PACKAGE_NAME"
 
-class AppDetailActivity : BaseActivity() {
+class AppDetailActivity : BaseActivity(), IDetailContainer {
 
     private lateinit var binding: ActivityAppDetailBinding
     private val pkgName by lazy { intent.getStringExtra(EXTRA_PACKAGE_NAME) }
     private val viewModel by viewModels<DetailViewModel>()
+    private var currentItemsCount = -1
 
-    override fun setViewBinding(): View {
+    override var currentFragment: Sortable? = null
+
+    override fun setViewBinding(): ViewGroup {
         isPaddingToolbar = true
         binding = ActivityAppDetailBinding.inflate(layoutInflater)
         return binding.root
@@ -58,13 +63,13 @@ class AppDetailActivity : BaseActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
-            supportFinishAfterTransition()
+            finishCompat()
         }
         return super.onOptionsItemSelected(item)
     }
 
     override fun onBackPressed() {
-        if (GlobalValues.isShowEntryAnimation.value!!) {
+        if (GlobalValues.isShowEntryAnimation.valueUnsafe) {
             supportFinishAfterTransition()
         } else {
             super.onBackPressed()
@@ -88,7 +93,7 @@ class AppDetailActivity : BaseActivity() {
                 duration = 250L
             }
         }
-        findViewById<View>(android.R.id.content).transitionName = "app_card_container"
+        findViewById<View>(android.R.id.content).transitionName = pkgName
         setEnterSharedElementCallback(MaterialContainerTransformSharedElementCallback())
     }
 
@@ -108,7 +113,7 @@ class AppDetailActivity : BaseActivity() {
                 try {
                     val packageInfo = PackageUtils.getPackageInfo(packageName)
                     ivAppIcon.apply {
-                        setImageDrawable(AppUtils.getAppIcon(packageName))
+                        load(AppUtils.getAppIcon(packageName))
                         setOnClickListener {
                             try {
                                 startActivity(IntentUtils.getLaunchAppIntent(pkgName))
@@ -140,83 +145,77 @@ class AppDetailActivity : BaseActivity() {
                     )
 
                     layoutAbi.tvAbi.text = PackageUtils.getAbiString(abi)
-                    layoutAbi.ivAbiType.setImageResource(PackageUtils.getAbiBadgeResource(abi))
+                    layoutAbi.ivAbiType.load(PackageUtils.getAbiBadgeResource(abi))
 
                     lifecycleScope.launch(Dispatchers.IO) {
                         val lcDao = LCDatabase.getDatabase(application).lcDao()
                         val repository = LCRepository(lcDao)
                         val lcItem = repository.getItem(packageName)
-                        val chipGroupBinding =
-                            LayoutChipGroupBinding.inflate(layoutInflater).apply {
-                                chipSplitApk.isVisible = lcItem?.isSplitApk ?: false
-                                chipKotlinUsed.isVisible = lcItem?.isKotlinUsed ?: false
-                            }
-                        chipGroupBinding.root.id = View.generateViewId()
+
+                        val isSplitApk = lcItem?.isSplitApk ?: false
+                        val isKotlinUsed = lcItem?.isKotlinUsed ?: false
 
                         withContext(Dispatchers.Main) {
-                            binding.headerContentLayout.addView(chipGroupBinding.root)
-                            ConstraintSet().apply {
-                                clone(binding.headerContentLayout)
-                                connect(
-                                    chipGroupBinding.root.id,
-                                    ConstraintSet.TOP,
-                                    binding.tvVersion.id,
-                                    ConstraintSet.BOTTOM,
-                                    resources.getDimension(R.dimen.normal_padding).toInt()
-                                )
-                                applyTo(binding.headerContentLayout)
+                            if (isSplitApk || isKotlinUsed) {
+                                binding.chipGroup.isVisible = true
+                                binding.chipSplitApk.isVisible = isSplitApk
+                                binding.chipKotlinUsed.isVisible = isKotlinUsed
+                            } else {
+                                binding.chipGroup.isVisible = false
                             }
                         }
                     }
                 } catch (e: Exception) {
+                    e.printStackTrace()
                     supportFinishAfterTransition()
                 }
 
                 ibSort.setOnClickListener {
-                    Sortable.currentReference?.get()?.sort()
+                    currentFragment?.sort()
                 }
             }
+
+            val types = listOf(
+                NATIVE, SERVICE, ACTIVITY, RECEIVER, PROVIDER/*, DEX*/
+            )
+            val tabTitles = listOf(
+                getText(R.string.ref_category_native),
+                getText(R.string.ref_category_service),
+                getText(R.string.ref_category_activity),
+                getText(R.string.ref_category_br),
+                getText(R.string.ref_category_cp),
+                getText(R.string.ref_category_dex)
+            )
+
+            binding.viewpager.apply {
+                adapter = object : FragmentStateAdapter(this@AppDetailActivity) {
+                    override fun getItemCount(): Int {
+                        return types.size
+                    }
+
+                    override fun createFragment(position: Int): Fragment {
+                        return when (position) {
+                            types.indexOf(NATIVE) -> NativeAnalysisFragment.newInstance(pkgName!!, NATIVE)
+                            types.indexOf(DEX) -> NativeAnalysisFragment.newInstance(pkgName!!, DEX)
+                            else -> ComponentsAnalysisFragment.newInstance(types[position])
+                        }
+                    }
+                }
+            }
+
+            val mediator = TabLayoutMediator(binding.tabLayout, binding.viewpager) { tab, position ->
+                tab.text = tabTitles[position]
+            }
+            mediator.attach()
+
+            viewModel.itemsCountLiveData.observe(this, {
+                if (currentItemsCount != it) {
+                    binding.tsComponentCount.setText(it.toString())
+                    currentItemsCount = it
+                }
+            })
+
             viewModel.initComponentsData(packageName)
         } ?: supportFinishAfterTransition()
-
-        val types = listOf(
-            NATIVE, SERVICE, ACTIVITY, RECEIVER, PROVIDER/*, DEX*/
-        )
-        val tabTitles = listOf(
-            getText(R.string.ref_category_native),
-            getText(R.string.ref_category_service),
-            getText(R.string.ref_category_activity),
-            getText(R.string.ref_category_br),
-            getText(R.string.ref_category_cp),
-            getText(R.string.ref_category_dex)
-        )
-
-        binding.viewpager.adapter = object : FragmentStateAdapter(this) {
-            override fun getItemCount(): Int {
-                return types.size
-            }
-
-            override fun createFragment(position: Int): Fragment {
-                return when (position) {
-                    types.indexOf(NATIVE) -> NativeAnalysisFragment.newInstance(pkgName!!, NATIVE)
-                    types.indexOf(DEX) -> NativeAnalysisFragment.newInstance(pkgName!!, DEX)
-                    else -> ComponentsAnalysisFragment.newInstance(types[position])
-                }
-            }
-        }
-
-        val mediator = TabLayoutMediator(binding.tabLayout, binding.viewpager,
-            TabLayoutMediator.TabConfigurationStrategy { tab, position ->
-                tab.text = tabTitles[position]
-            })
-        mediator.attach()
-    }
-
-    private fun setRootPadding() {
-        val isLandScape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        binding.root.apply {
-            fitsSystemWindows = isLandScape
-            setPadding(0, if (isLandScape) 0 else BarUtils.getStatusBarHeight(), 0, 0)
-        }
     }
 }

@@ -5,77 +5,78 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.absinthe.libchecker.LibCheckerApp
-import com.absinthe.libchecker.bean.AppItem
+import com.absinthe.libchecker.annotation.*
 import com.absinthe.libchecker.bean.LibReference
 import com.absinthe.libchecker.bean.LibStringItem
-import com.absinthe.libchecker.constant.*
+import com.absinthe.libchecker.constant.Constants.ERROR
+import com.absinthe.libchecker.constant.GlobalValues
+import com.absinthe.libchecker.constant.LibChip
+import com.absinthe.libchecker.constant.OnceTag
 import com.absinthe.libchecker.constant.librarymap.BaseMap
 import com.absinthe.libchecker.constant.librarymap.NativeLibMap
 import com.absinthe.libchecker.database.AppItemRepository
 import com.absinthe.libchecker.database.LCDatabase
-import com.absinthe.libchecker.database.LCItem
 import com.absinthe.libchecker.database.LCRepository
-import com.absinthe.libchecker.ktx.logd
+import com.absinthe.libchecker.database.entity.LCItem
+import com.absinthe.libchecker.extensions.logd
+import com.absinthe.libchecker.extensions.valueUnsafe
 import com.absinthe.libchecker.utils.PackageUtils
-import com.absinthe.libchecker.utils.TimeRecorder
-import com.blankj.utilcode.util.AppUtils
+import com.absinthe.libraries.utils.manager.TimeRecorder
 import com.microsoft.appcenter.analytics.Analytics
 import jonathanfinerty.once.Once
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+
+const val GET_INSTALL_APPS_RETRY_PERIOD = 200L
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     val dbItems: LiveData<List<LCItem>>
     val libReference: MutableLiveData<List<LibReference>> = MutableLiveData()
-    val clickBottomItemFlag: MutableLiveData<Boolean> = MutableLiveData(false)
-    var refreshLock = false
+    val reloadAppsFlag: MutableLiveData<Boolean> = MutableLiveData(false)
 
+    private var isInitingItems = false
     private val repository: LCRepository
 
     init {
         val lcDao = LCDatabase.getDatabase(application).lcDao()
         repository = LCRepository(lcDao)
-        dbItems = repository.allItems
+        dbItems = repository.allDatabaseItems
     }
 
     fun initItems() = viewModelScope.launch(Dispatchers.IO) {
         logd("Init all items START")
 
         val context: Context = getApplication<LibCheckerApp>()
-
         val timeRecorder = TimeRecorder()
         timeRecorder.start()
 
+        isInitingItems = true
         repository.deleteAllItems()
 
-        var appList: List<ApplicationInfo>? = null
-        while (appList == null) {
+        var appList: List<ApplicationInfo>?
+
+        do {
             appList = try {
                 PackageUtils.getInstallApplications()
             } catch (e: Exception) {
+                delay(GET_INSTALL_APPS_RETRY_PERIOD)
                 null
             }
-        }
+        } while (appList == null)
 
-        val newItems = ArrayList<AppItem>()
+        val lcItems = mutableListOf<LCItem>()
         var packageInfo: PackageInfo
         var versionCode: Long
         var abiType: Int
         var isSystemType: Boolean
         var isKotlinType: Boolean
 
-        var appItem: AppItem
         var lcItem: LCItem
 
         for (info in appList) {
@@ -86,16 +87,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 isSystemType =
                     (info.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM
                 isKotlinType = PackageUtils.isKotlinUsed(packageInfo)
-                appItem = AppItem().apply {
-                    icon = info.loadIcon(context.packageManager)
-                    appName = info.loadLabel(context.packageManager).toString()
-                    packageName = info.packageName
-                    versionName = PackageUtils.getVersionString(packageInfo)
-                    abi = abiType
-                    isSystem = isSystemType
-                    updateTime = packageInfo.lastUpdateTime
-                    isKotlinUsed = isKotlinType
-                }
 
                 lcItem = LCItem(
                     info.packageName,
@@ -110,124 +101,60 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     isKotlinType
                 )
 
-                GlobalValues.isShowSystemApps.value?.let {
-                    if (it || (!it && !lcItem.isSystem)) {
-                        newItems.add(appItem)
-                    }
-                }
-
-                insert(lcItem)
+                lcItems.add(lcItem)
             } catch (e: Throwable) {
                 e.printStackTrace()
                 continue
             }
         }
 
-        //Sort
-        when (GlobalValues.appSortMode.value) {
-            Constants.SORT_MODE_DEFAULT -> newItems.sortWith(compareBy({ it.abi }, { it.appName }))
-            Constants.SORT_MODE_UPDATE_TIME_DESC -> newItems.sortByDescending { it.updateTime }
-        }
+        insert(lcItems)
 
-        withContext(Dispatchers.Main) {
-            GlobalValues.isObservingDBItems.value = true
-            AppItemRepository.allItems.value = newItems
-        }
-
+        isInitingItems = false
         timeRecorder.end()
         logd("Init all items END, $timeRecorder")
     }
 
-    fun addItem() = viewModelScope.launch(Dispatchers.IO) {
-        logd("Add all items START")
-
-        val timeRecorder = TimeRecorder()
-        timeRecorder.start()
-
-        dbItems.value?.let { value ->
-            val newItems = ArrayList<AppItem>()
-            var appItem: AppItem
-
-            for (item in value) {
-                appItem = AppItem().apply {
-                    icon = AppUtils.getAppIcon(item.packageName)
-                        ?: ColorDrawable(Color.TRANSPARENT)
-                    appName = item.label
-                    packageName = item.packageName
-                    versionName = PackageUtils.getVersionString(item.versionName, item.versionCode)
-                    abi = item.abi.toInt()
-                    isSystem = item.isSystem
-                    updateTime = item.lastUpdatedTime
-                    isKotlinUsed = item.isKotlinUsed
-                }
-
-                GlobalValues.isShowSystemApps.value?.let {
-                    if (it || (!it && !item.isSystem)) {
-                        newItems.add(appItem)
-                    }
-                }
-            }
-
-            when (GlobalValues.appSortMode.value) {
-                Constants.SORT_MODE_DEFAULT -> newItems.sortWith(
-                    compareBy(
-                        { it.abi },
-                        { it.appName })
-                )
-                Constants.SORT_MODE_UPDATE_TIME_DESC -> newItems.sortByDescending { it.updateTime }
-            }
-
-            withContext(Dispatchers.Main) {
-                AppItemRepository.allItems.value = newItems
-            }
-
-            timeRecorder.end()
-            logd("Add all items END, $timeRecorder")
-            refreshLock = false
+    fun requestChange(packageManager: PackageManager, needRefresh: Boolean = false) = viewModelScope.launch(Dispatchers.IO) {
+        if (isInitingItems) {
+            logd("Request change isInitingItems return")
+            return@launch
         }
-    }
-
-    fun requestChange() = viewModelScope.launch(Dispatchers.IO) {
-        logd("Request change START")
-
-        val context: Context = getApplication<LibCheckerApp>()
-
-        val timeRecorder = TimeRecorder()
-        timeRecorder.start()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestChangeImpl(context)
+            requestChangeImpl(packageManager, needRefresh)
         } else {
             try {
-                requestChangeImpl(context)
+                requestChangeImpl(packageManager, needRefresh)
             } catch (e: VerifyError) {
                 e.printStackTrace()
             }
         }
-
-        timeRecorder.end()
-        logd("Request change END, $timeRecorder")
     }
 
-    private fun requestChangeImpl(context: Context) {
-        var appList: MutableList<ApplicationInfo>? = null
-        while (appList == null) {
-            appList = try {
-                PackageUtils.getInstallApplications().toMutableList()
-            } catch (e: Exception) {
-                null
-            }
-        }
+    private suspend fun requestChangeImpl(packageManager: PackageManager, needRefresh: Boolean = false) {
+        logd("Request change START")
+        val timeRecorder = TimeRecorder()
+        var appList: MutableList<ApplicationInfo>? = AppItemRepository.allApplicationInfoItems.value?.toMutableList()
 
-        if (!Once.beenDone(Once.THIS_APP_VERSION, OnceTag.HAS_COLLECT_LIB)) {
-            collectPopularLibraries(appList)
-            Once.markDone(OnceTag.HAS_COLLECT_LIB)
+        timeRecorder.start()
+
+        if (appList.isNullOrEmpty() || needRefresh) {
+            do {
+                appList = try {
+                    PackageUtils.getInstallApplications().toMutableList()
+                } catch (e: Exception) {
+                    delay(GET_INSTALL_APPS_RETRY_PERIOD)
+                    null
+                }
+            } while (appList == null)
         }
 
         dbItems.value?.let { value ->
             var packageInfo: PackageInfo
             var versionCode: Long
             var lcItem: LCItem
+            var abi: Int
 
             for (dbItem in value) {
                 try {
@@ -236,18 +163,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         versionCode = PackageUtils.getVersionCode(packageInfo)
 
                         if (packageInfo.lastUpdateTime != dbItem.lastUpdatedTime) {
-                            lcItem = LCItem(
-                                it.packageName,
-                                it.loadLabel(context.packageManager).toString(),
-                                packageInfo.versionName ?: "null",
-                                versionCode,
-                                packageInfo.firstInstallTime,
-                                packageInfo.lastUpdateTime,
-                                (it.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM,
-                                PackageUtils.getAbi(it.sourceDir, it.nativeLibraryDir).toShort(),
-                                PackageUtils.isSplitsApk(packageInfo),
-                                PackageUtils.isKotlinUsed(packageInfo)
-                            )
+                            do {
+                                abi = PackageUtils.getAbi(it.sourceDir, it.nativeLibraryDir)
+                                lcItem = LCItem(
+                                    it.packageName,
+                                    it.loadLabel(packageManager).toString(),
+                                    packageInfo.versionName ?: "null",
+                                    versionCode,
+                                    packageInfo.firstInstallTime,
+                                    packageInfo.lastUpdateTime,
+                                    (it.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM,
+                                    abi.toShort(),
+                                    PackageUtils.isSplitsApk(packageInfo),
+                                    PackageUtils.isKotlinUsed(packageInfo)
+                                )
+                            } while (abi == ERROR)
                             update(lcItem)
                         }
 
@@ -267,7 +197,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                     lcItem = LCItem(
                         info.packageName,
-                        info.loadLabel(context.packageManager).toString(),
+                        info.loadLabel(packageManager).toString(),
                         packageInfo.versionName ?: "null",
                         versionCode,
                         packageInfo.firstInstallTime,
@@ -277,6 +207,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         PackageUtils.isSplitsApk(packageInfo),
                         PackageUtils.isKotlinUsed(packageInfo)
                     )
+                    do {
+                        abi = PackageUtils.getAbi(info.sourceDir, info.nativeLibraryDir)
+                        lcItem = LCItem(
+                            info.packageName,
+                            info.loadLabel(packageManager).toString(),
+                            packageInfo.versionName ?: "null",
+                            versionCode,
+                            packageInfo.firstInstallTime,
+                            packageInfo.lastUpdateTime,
+                            (info.flags and ApplicationInfo.FLAG_SYSTEM) == ApplicationInfo.FLAG_SYSTEM,
+                            abi.toShort(),
+                            PackageUtils.isSplitsApk(packageInfo),
+                            PackageUtils.isKotlinUsed(packageInfo)
+                        )
+                    } while (abi == ERROR)
 
                     insert(lcItem)
                 } catch (e: Exception) {
@@ -285,15 +230,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
             GlobalScope.launch(Dispatchers.Main) {
                 GlobalValues.shouldRequestChange.value = false
+                AppItemRepository.shouldRefreshAppList = true
             }
         } ?: let {
             GlobalScope.launch(Dispatchers.Main) {
                 GlobalValues.shouldRequestChange.value = true
             }
         }
+
+        timeRecorder.end()
+        logd("Request change END, $timeRecorder")
+
+        delay(10000)
+        if (!Once.beenDone(Once.THIS_APP_VERSION, OnceTag.HAS_COLLECT_LIB)) {
+            collectPopularLibraries(appList.toList())
+            Once.markDone(OnceTag.HAS_COLLECT_LIB)
+        }
     }
 
-    private fun collectPopularLibraries(appList: List<ApplicationInfo>) = viewModelScope.launch(Dispatchers.IO) {
+    private fun collectPopularLibraries(appList: List<ApplicationInfo>) = viewModelScope.launch(Dispatchers.Default) {
         val map = HashMap<String, Int>()
         var libList: List<LibStringItem>
         var count: Int
@@ -310,10 +265,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     map[lib.name] = count + 1
                 }
             }
+            val properties: MutableMap<String, String> = HashMap()
 
             for (entry in map) {
                 if (entry.value > 3 && !NativeLibMap.getMap().containsKey(entry.key)) {
-                    val properties: MutableMap<String, String> = java.util.HashMap()
+                    properties.clear()
                     properties["Library name"] = entry.key
                     properties["Library count"] = entry.value.toString()
 
@@ -341,7 +297,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 PROVIDER,
                 "Provider"
             )
-        } catch (ignore: Exception) {}
+        } catch (ignore: Exception) {
+
+        }
     }
 
     private fun collectComponentPopularLibraries(
@@ -367,11 +325,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val libMap = BaseMap.getMap(type)
+        val properties: MutableMap<String, String> = HashMap()
+
         for (entry in map) {
-            if (entry.value > 3 && !libMap.getMap()
-                    .containsKey(entry.key) && libMap.findRegex(entry.key) == null
-            ) {
-                val properties: MutableMap<String, String> = java.util.HashMap()
+            if (entry.value > 3 && !libMap.getMap().containsKey(entry.key) && libMap.findRegex(entry.key) == null) {
+                properties.clear()
                 properties["Library name"] = entry.key
                 properties["Library count"] = entry.value.toString()
 
@@ -388,13 +346,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun computeLibReference(@LibType type: Int) =
         viewModelScope.launch(Dispatchers.IO) {
             val context: Context = getApplication<LibCheckerApp>()
-            var appList: List<ApplicationInfo>? = null
-            while (appList == null) {
-                appList = try {
-                    PackageUtils.getInstallApplications()
-                } catch (e: Exception) {
-                    null
-                }
+            var appList: List<ApplicationInfo>? = AppItemRepository.allApplicationInfoItems.value
+
+            if (appList.isNullOrEmpty()) {
+                do {
+                    appList = try {
+                        PackageUtils.getInstallApplications()
+                    } catch (e: Exception) {
+                        delay(GET_INSTALL_APPS_RETRY_PERIOD)
+                        null
+                    }
+                } while (appList == null)
             }
 
             val map = HashMap<String, RefCountType>()
@@ -425,11 +387,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         try {
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_SERVICES
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_SERVICES
+                            )
 
                             packageInfo.services?.let {
                                 for (service in it) {
@@ -438,11 +399,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                             }
 
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_ACTIVITIES
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_ACTIVITIES
+                            )
                             packageInfo.activities?.let {
                                 for (activity in it) {
                                     count = map[activity.name]?.count ?: 0
@@ -450,11 +410,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                             }
 
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_RECEIVERS
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_RECEIVERS
+                            )
                             packageInfo.receivers?.let {
                                 for (receiver in it) {
                                     count = map[receiver.name]?.count ?: 0
@@ -462,11 +421,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 }
                             }
 
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_PROVIDERS
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_PROVIDERS
+                            )
                             packageInfo.providers?.let {
                                 for (provider in it) {
                                     count = map[provider.name]?.count ?: 0
@@ -492,8 +450,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                         for (lib in libList) {
                             count = map[lib.name]?.count ?: 0
-                            map[lib.name] =
-                                RefCountType(count + 1, NATIVE)
+                            map[lib.name] = RefCountType(count + 1, NATIVE)
                         }
                     }
                 }
@@ -530,11 +487,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         try {
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_ACTIVITIES
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_ACTIVITIES
+                            )
                             packageInfo.activities?.let {
                                 for (activity in it) {
                                     count = map[activity.name]?.count ?: 0
@@ -554,11 +510,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         try {
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_RECEIVERS
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_RECEIVERS
+                            )
                             packageInfo.receivers?.let {
                                 for (receiver in it) {
                                     count = map[receiver.name]?.count ?: 0
@@ -578,11 +533,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         try {
-                            packageInfo =
-                                context.packageManager.getPackageInfo(
-                                    item.packageName,
-                                    PackageManager.GET_PROVIDERS
-                                )
+                            packageInfo = context.packageManager.getPackageInfo(
+                                item.packageName,
+                                PackageManager.GET_PROVIDERS
+                            )
                             packageInfo.providers?.let {
                                 for (provider in it) {
                                     count = map[provider.name]?.count ?: 0
@@ -596,13 +550,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            var chip: LibChip?
             for (entry in map) {
-                if (entry.value.count >= GlobalValues.libReferenceThreshold.value!! && entry.key.isNotBlank()) {
-
-                    val chip = BaseMap.getMap(entry.value.type).getChip(entry.key)
-                    refList.add(
-                        LibReference(entry.key, chip, entry.value.count, entry.value.type)
-                    )
+                if (entry.value.count >= GlobalValues.libReferenceThreshold.valueUnsafe && entry.key.isNotBlank()) {
+                    chip = BaseMap.getMap(entry.value.type).getChip(entry.key)
+                    refList.add(LibReference(entry.key, chip, entry.value.count, entry.value.type))
                 }
             }
 
@@ -615,13 +567,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshRef() {
         libReference.value?.let { ref ->
-            libReference.value =
-                ref.filter { it.referredCount >= GlobalValues.libReferenceThreshold.value!! }
+            libReference.value = ref.filter { it.referredCount >= GlobalValues.libReferenceThreshold.valueUnsafe }
         }
     }
 
     private fun insert(item: LCItem) = viewModelScope.launch(Dispatchers.IO) {
         repository.insert(item)
+    }
+
+    private fun insert(list: List<LCItem>) = viewModelScope.launch(Dispatchers.IO) {
+        repository.insert(list)
     }
 
     private fun update(item: LCItem) = viewModelScope.launch(Dispatchers.IO) {

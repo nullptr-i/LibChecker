@@ -5,35 +5,39 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.view.MenuItem
-import android.view.View
+import android.view.ViewGroup
 import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import coil.load
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
+import com.absinthe.libchecker.annotation.*
 import com.absinthe.libchecker.bean.LibStringItem
-import com.absinthe.libchecker.constant.*
 import com.absinthe.libchecker.constant.librarymap.NativeLibMap
 import com.absinthe.libchecker.databinding.ActivityAppDetailBinding
-import com.absinthe.libchecker.ktx.setLongClickCopiedToClipboard
+import com.absinthe.libchecker.extensions.setLongClickCopiedToClipboard
 import com.absinthe.libchecker.ui.fragment.applist.ComponentsAnalysisFragment
 import com.absinthe.libchecker.ui.fragment.applist.NativeAnalysisFragment
 import com.absinthe.libchecker.ui.fragment.applist.Sortable
 import com.absinthe.libchecker.utils.PackageUtils
 import com.absinthe.libchecker.utils.Toasty
 import com.absinthe.libchecker.viewmodel.DetailViewModel
-import com.blankj.utilcode.util.BarUtils
 import com.blankj.utilcode.util.FileIOUtils
 import com.google.android.material.tabs.TabLayoutMediator
 import java.io.File
 
-class ApkDetailActivity : BaseActivity() {
+class ApkDetailActivity : BaseActivity(), IDetailContainer {
 
     private lateinit var binding: ActivityAppDetailBinding
     private var tempFile: File? = null
+    private var currentItemsCount = -1
+
     private val viewModel by viewModels<DetailViewModel>()
 
-    override fun setViewBinding(): View {
+    override var currentFragment: Sortable? = null
+
+    override fun setViewBinding(): ViewGroup {
         isPaddingToolbar = true
         binding = ActivityAppDetailBinding.inflate(layoutInflater)
         return binding.root
@@ -51,6 +55,11 @@ class ApkDetailActivity : BaseActivity() {
         }
     }
 
+    override fun onDestroy() {
+        tempFile?.delete()
+        super.onDestroy()
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
             finish()
@@ -63,7 +72,6 @@ class ApkDetailActivity : BaseActivity() {
         setRootPadding()
     }
 
-    @SuppressLint("SetTextI18n")
     private fun initView(uri: Uri) {
         setRootPadding()
         setSupportActionBar(binding.toolbar)
@@ -73,14 +81,6 @@ class ApkDetailActivity : BaseActivity() {
         }
 
         initData(uri)
-    }
-
-    private fun setRootPadding() {
-        val isLandScape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        binding.root.apply {
-            fitsSystemWindows = isLandScape
-            setPadding(0, if (isLandScape) 0 else BarUtils.getStatusBarHeight(), 0, 0)
-        }
     }
 
     @SuppressLint("SetTextI18n")
@@ -106,9 +106,7 @@ class ApkDetailActivity : BaseActivity() {
                 }
                 binding.apply {
                     try {
-                        ivAppIcon.apply {
-                            setImageDrawable(it.applicationInfo.loadIcon(packageManager))
-                        }
+                        ivAppIcon.load(it.applicationInfo.loadIcon(packageManager))
                         tvAppName.apply {
                             text = it.applicationInfo.loadLabel(packageManager)
                             setLongClickCopiedToClipboard(text.toString())
@@ -130,15 +128,23 @@ class ApkDetailActivity : BaseActivity() {
                         )
 
                         layoutAbi.tvAbi.text = PackageUtils.getAbiString(abi)
-                        layoutAbi.ivAbiType.setImageResource(PackageUtils.getAbiBadgeResource(abi))
+                        layoutAbi.ivAbiType.load(PackageUtils.getAbiBadgeResource(abi))
                     } catch (e: Exception) {
                         supportFinishAfterTransition()
                     }
 
                     ibSort.setOnClickListener {
-                        Sortable.currentReference?.get()?.sort()
+                        currentFragment?.sort()
                     }
                 }
+
+                viewModel.itemsCountLiveData.observe(this, { count ->
+                    if (currentItemsCount != count) {
+                        binding.tsComponentCount.setText(count.toString())
+                        currentItemsCount = count
+                    }
+                })
+
                 viewModel.initComponentsData(path)
             } ?: finish()
         } catch (e: Exception) {
@@ -172,10 +178,9 @@ class ApkDetailActivity : BaseActivity() {
             }
         }
 
-        val mediator = TabLayoutMediator(binding.tabLayout, binding.viewpager,
-            TabLayoutMediator.TabConfigurationStrategy { tab, position ->
-                tab.text = tabTitles[position]
-            })
+        val mediator = TabLayoutMediator(binding.tabLayout, binding.viewpager) { tab, position ->
+            tab.text = tabTitles[position]
+        }
         mediator.attach()
 
         if (libList.isEmpty()) {

@@ -3,38 +3,42 @@ package com.absinthe.libchecker.ui.fragment.applist
 import android.os.Bundle
 import android.view.View
 import androidx.fragment.app.activityViewModels
-import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import com.absinthe.libchecker.R
+import com.absinthe.libchecker.annotation.LibType
+import com.absinthe.libchecker.annotation.SERVICE
 import com.absinthe.libchecker.bean.LibStringItem
+import com.absinthe.libchecker.bean.LibStringItemChip
 import com.absinthe.libchecker.constant.Constants
 import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.constant.LibType
-import com.absinthe.libchecker.constant.SERVICE
 import com.absinthe.libchecker.constant.librarymap.BaseMap
 import com.absinthe.libchecker.databinding.FragmentLibComponentBinding
 import com.absinthe.libchecker.databinding.LayoutEmptyListBinding
+import com.absinthe.libchecker.extensions.addPaddingBottom
 import com.absinthe.libchecker.recyclerview.adapter.LibStringAdapter
 import com.absinthe.libchecker.recyclerview.diff.LibStringDiffUtil
+import com.absinthe.libchecker.ui.detail.IDetailContainer
 import com.absinthe.libchecker.ui.fragment.BaseFragment
-import com.absinthe.libchecker.utils.*
+import com.absinthe.libchecker.utils.SPUtils
+import com.absinthe.libchecker.utils.Toasty
 import com.absinthe.libchecker.view.dialogfragment.LibDetailDialogFragment
 import com.absinthe.libchecker.viewmodel.DetailViewModel
+import com.absinthe.libraries.utils.utils.AntiShakeUtils
+import com.absinthe.libraries.utils.utils.UiUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import rikka.core.util.ClipboardUtils
-import java.lang.ref.WeakReference
 
 const val EXTRA_TYPE = "EXTRA_TYPE"
 
-class ComponentsAnalysisFragment :
-    BaseFragment<FragmentLibComponentBinding>(R.layout.fragment_lib_component), Sortable {
+class ComponentsAnalysisFragment : BaseFragment<FragmentLibComponentBinding>(R.layout.fragment_lib_component), Sortable {
 
     private val viewModel by activityViewModels<DetailViewModel>()
     private val adapter by lazy { LibStringAdapter(arguments?.getInt(EXTRA_TYPE) ?: SERVICE) }
     private val emptyLayoutBinding by lazy { LayoutEmptyListBinding.inflate(layoutInflater) }
+    private var isListReady = false
 
     override fun initBinding(view: View): FragmentLibComponentBinding = FragmentLibComponentBinding.bind(view)
 
@@ -48,31 +52,27 @@ class ComponentsAnalysisFragment :
                         DividerItemDecoration.VERTICAL
                     )
                 )
-                setPadding(
-                    paddingStart,
-                    paddingTop,
-                    paddingEnd,
-                    paddingBottom + UiUtils.getNavBarHeight()
-                )
+                addPaddingBottom(UiUtils.getNavBarHeight(requireActivity().contentResolver))
             }
         }
 
         viewModel.apply {
-            componentsMap[adapter.type]?.observe(viewLifecycleOwner, Observer { componentList ->
+            componentsMap[adapter.type]?.observe(viewLifecycleOwner, { componentList ->
                 if (componentList.isEmpty()) {
                     emptyLayoutBinding.text.text = getString(R.string.empty_list)
                 } else {
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val list = mutableListOf<LibStringItem>()
+                    lifecycleScope.launch {
+                        val list = mutableListOf<LibStringItemChip>()
+                        val map = BaseMap.getMap(adapter.type)
+
                         for (item in componentList) {
-                            list.add(LibStringItem(item))
+                            list.add(LibStringItemChip(LibStringItem(item), map.getChip(item)))
                         }
 
-                        val map = BaseMap.getMap(adapter.type)
                         if (sortMode == MODE_SORT_BY_LIB) {
-                            list.sortByDescending { map.contains(it.name) }
+                            list.sortByDescending { it.chip != null }
                         } else {
-                            adapter.data.sortedByDescending { it.name }
+                            adapter.data.sortedByDescending { it.item.name }
                         }
 
                         withContext(Dispatchers.Main) {
@@ -80,21 +80,18 @@ class ComponentsAnalysisFragment :
                         }
                     }
                 }
+                if (!isListReady) {
+                    viewModel.itemsCountLiveData.value = componentList.size
+                    isListReady = true
+                }
             })
         }
 
         fun openLibDetailDialog(position: Int) {
-            if (GlobalValues.config.enableComponentsDetail) {
-                val name = adapter.getItem(position).name
-                val regexName = BaseMap.getMap(adapter.type).findRegex(name)?.regexName
+            val name = adapter.getItem(position).item.name
+            val regexName = BaseMap.getMap(adapter.type).findRegex(name)?.regexName
 
-                LibDetailDialogFragment.newInstance(name, adapter.type, regexName)
-                    .apply {
-                        ActivityStackManager.topActivity?.apply {
-                            show(supportFragmentManager, tag)
-                        }
-                    }
-            }
+            LibDetailDialogFragment.newInstance(name, adapter.type, regexName).show(childFragmentManager, tag)
         }
 
         adapter.apply {
@@ -105,7 +102,7 @@ class ComponentsAnalysisFragment :
                 openLibDetailDialog(position)
             }
             setOnItemLongClickListener { _, _, position ->
-                ClipboardUtils.put(requireContext(), getItem(position).name)
+                ClipboardUtils.put(requireContext(), getItem(position).item.name)
                 Toasty.show(requireContext(), R.string.toast_copied_to_clipboard)
                 true
             }
@@ -123,7 +120,11 @@ class ComponentsAnalysisFragment :
 
     override fun onResume() {
         super.onResume()
-        Sortable.currentReference = WeakReference(this)
+        (requireActivity() as IDetailContainer).currentFragment = this
+
+        if (isListReady) {
+            viewModel.itemsCountLiveData.value = adapter.data.size
+        }
     }
 
     companion object {
@@ -140,11 +141,11 @@ class ComponentsAnalysisFragment :
     override fun sort() {
         viewModel.sortMode = if (viewModel.sortMode == MODE_SORT_BY_SIZE) {
             val map = BaseMap.getMap(adapter.type)
-            adapter.setDiffNewData(adapter.data.sortedByDescending { map.contains(it.name) }
+            adapter.setDiffNewData(adapter.data.sortedByDescending { map.contains(it.item.name) }
                 .toMutableList())
             MODE_SORT_BY_LIB
         } else {
-            adapter.setDiffNewData(adapter.data.sortedByDescending { it.name }
+            adapter.setDiffNewData(adapter.data.sortedByDescending { it.item.name }
                 .toMutableList())
             MODE_SORT_BY_SIZE
         }

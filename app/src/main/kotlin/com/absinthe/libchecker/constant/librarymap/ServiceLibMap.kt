@@ -196,6 +196,20 @@ object ServiceLibMap : BaseMap() {
             )
         ),
         Pair(
+            "com.heytap.msp.push.service.CompatibleDataMessageCallbackService",
+            LibChip(
+                R.drawable.ic_lib_oppo,
+                "OPPO Push"
+            )
+        ),
+        Pair(
+            "com.heytap.msp.push.service.DataMessageCallbackService",
+            LibChip(
+                R.drawable.ic_lib_oppo,
+                "OPPO Push"
+            )
+        ),
+        Pair(
             "com.alibaba.sdk.android.push.MsgService",
             LibChip(
                 R.drawable.ic_lib_aliyun,
@@ -287,6 +301,20 @@ object ServiceLibMap : BaseMap() {
             )
         ),
         Pair(
+            "com.edge.pcdn.PcdnLiveService",
+            LibChip(
+                R.drawable.ic_lib_alibaba,
+                "PCDN SDK"
+            )
+        ),
+        Pair(
+            "com.edge.pcdn.PcdnVodService",
+            LibChip(
+                R.drawable.ic_lib_alibaba,
+                "PCDN SDK"
+            )
+        ),
+        Pair(
             "com.tencent.android.tpush.service.XGDaemonService",
             LibChip(
                 R.drawable.ic_lib_tencent,
@@ -309,13 +337,6 @@ object ServiceLibMap : BaseMap() {
         ),
         Pair(
             "com.tencent.android.tpush.service.XGPushServiceV4",
-            LibChip(
-                R.drawable.ic_lib_tencent,
-                "信鸽推送"
-            )
-        ),
-        Pair(
-            "com.tencent.android.tpush.rpc.XGRemoteService",
             LibChip(
                 R.drawable.ic_lib_tencent,
                 "信鸽推送"
@@ -455,6 +476,27 @@ object ServiceLibMap : BaseMap() {
             )
         ),
         Pair(
+            "com.tencent.android.tpush.service.XGVipPushService",
+            LibChip(
+                R.drawable.ic_lib_tencent_cloud,
+                "腾讯移动推送"
+            )
+        ),
+        Pair(
+            "com.tencent.android.tpush.rpc.XGRemoteService",
+            LibChip(
+                R.drawable.ic_lib_tencent_cloud,
+                "腾讯移动推送"
+            )
+        ),
+        Pair(
+            "com.tencent.tpns.mqttchannel.services.MqttService",
+            LibChip(
+                R.drawable.ic_lib_tencent_cloud,
+                "腾讯移动推送"
+            )
+        ),
+        Pair(
             "com.google.android.gms.auth.api.signin.RevocationBoundService",
             LibChip(
                 R.drawable.ic_lib_google,
@@ -513,28 +555,28 @@ object ServiceLibMap : BaseMap() {
         Pair(
             "com.liulishuo.filedownloader.services.FileDownloadService\$SeparateProcessService",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "FileDownloader"
             )
         ),
         Pair(
             "com.liulishuo.filedownloader.services.FileDownloadService\$SharedMainProcessService",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "FileDownloader"
             )
         ),
         Pair(
             "com.igexin.sdk.PushService",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "个推"
             )
         ),
         Pair(
             "com.blankj.utilcode.util.MessengerUtils\$ServerService",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "AndroidUtilCode"
             )
         ),
@@ -618,21 +660,73 @@ object ServiceLibMap : BaseMap() {
         Pair(
             "com.yanzhenjie.permission.bridge.BridgeService",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "AndPermission"
             )
-        )
+        ),
+        Pair(
+            "com.baidu.android.pushservice.CommandService",
+            LibChip(
+                R.drawable.ic_lib_baidu,
+                "百度云推送"
+            )
+        ),
+        Pair(
+            "com.baidu.android.pushservice.HmsPushPatchMessageService",
+            LibChip(
+                R.drawable.ic_lib_baidu,
+                "百度云推送"
+            )
+        ),
+        Pair(
+            "com.baidu.android.pushservice.PushService",
+            LibChip(
+                R.drawable.ic_lib_baidu,
+                "百度云推送"
+            )
+        ),
+        Pair(
+            "com.baidu.android.pushservice.job.PushJobService",
+            LibChip(
+                R.drawable.ic_lib_baidu,
+                "百度云推送"
+            )
+        ),
+        Pair(
+            "com.bytedance.boost_multidex.OptimizeService",
+            LibChip(
+                R.drawable.ic_lib_bytedance,
+                "BoostMultiDex"
+            )
+        ),
+        Pair(
+            "com.ksad.download.service.DownloadService",
+            LibChip(
+                R.drawable.ic_lib_kuaishou,
+                "快手广告 SDK"
+            )
+        ),
+        Pair(
+            "com.bytedance.tea.crash.upload.CrashUploadService",
+            LibChip(
+                R.drawable.ic_lib_bytedance,
+                "Pangle SDK"
+            )
+        ),
     )
 
     override fun getMap(): HashMap<String, LibChip> {
         return MAP
     }
 
+    private val PATTERN_REPLUGIN = Pattern.compile("com.qihoo360.replugin.component.service.server.PluginPitService(.*)")
+    private val PATTERN_PANGLE_1 = Pattern.compile("com.ss.android.socialbase.(.*)")
+    private val PATTERN_PANGLE_2 = Pattern.compile("com.bytedance.sdk.openadsdk.(.*)")
+
     override fun findRegex(name: String): LibChip? {
         return when {
-            Pattern.matches("com.qihoo360.replugin.component.service.server.PluginPitService(.*)", name) -> LibChip(R.drawable.ic_lib_360, "RePlugin", "regex_replugin")
-            Pattern.matches("com.ss.android.socialbase.(.*)", name) -> LibChip(R.drawable.ic_lib_toutiao, "头条广告 SDK", "regex_toutiao_ad")
-            Pattern.matches("com.bytedance.sdk.openadsdk.(.*)", name) -> LibChip(R.drawable.ic_lib_toutiao, "头条广告 SDK", "regex_toutiao_ad")
+            PATTERN_REPLUGIN.matcher(name).matches() -> LibChip(R.drawable.ic_lib_360, "RePlugin", "regex_replugin")
+            matchAllPatterns(name, PATTERN_PANGLE_1, PATTERN_PANGLE_2) -> LibChip(R.drawable.ic_lib_bytedance, "Pangle SDK", "regex_pangle")
             else -> null
         }
     }

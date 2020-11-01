@@ -5,24 +5,29 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.view.MenuItem
-import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import androidx.activity.viewModels
-import androidx.lifecycle.Observer
+import androidx.lifecycle.lifecycleScope
 import com.absinthe.libchecker.BaseActivity
 import com.absinthe.libchecker.R
+import com.absinthe.libchecker.annotation.*
 import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.constant.NATIVE
+import com.absinthe.libchecker.constant.librarymap.BaseMap
 import com.absinthe.libchecker.databinding.ActivityLibReferenceBinding
+import com.absinthe.libchecker.extensions.*
 import com.absinthe.libchecker.recyclerview.adapter.AppAdapter
 import com.absinthe.libchecker.ui.detail.AppDetailActivity
 import com.absinthe.libchecker.ui.detail.EXTRA_PACKAGE_NAME
-import com.absinthe.libchecker.utils.AntiShakeUtils
-import com.absinthe.libchecker.utils.UiUtils
 import com.absinthe.libchecker.viewmodel.LibReferenceViewModel
+import com.absinthe.libraries.utils.utils.AntiShakeUtils
+import com.absinthe.libraries.utils.utils.UiUtils
 import com.blankj.utilcode.util.BarUtils
 import com.google.android.material.transition.platform.MaterialContainerTransformSharedElementCallback
+import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rikka.material.widget.BorderView
 
 const val EXTRA_NAME = "NAME"
@@ -34,7 +39,7 @@ class LibReferenceActivity : BaseActivity() {
     private val adapter = AppAdapter()
     private val viewModel by viewModels<LibReferenceViewModel>()
 
-    override fun setViewBinding(): View {
+    override fun setViewBinding(): ViewGroup {
         binding = ActivityLibReferenceBinding.inflate(layoutInflater)
         return binding.root
     }
@@ -54,13 +59,23 @@ class LibReferenceActivity : BaseActivity() {
             finish()
         } else {
             initView()
-            viewModel.setData(name, type)
+            viewModel.dbItems.observe(this, {
+                viewModel.setData(name, type)
+            })
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                BaseMap.getMap(type).getChip(name)?.let {
+                    withContext(Dispatchers.Main) {
+                        toolbar.title = it.name
+                    }
+                }
+            }
         }
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == android.R.id.home) {
-            onBackPressed()
+            finish()
         }
         return super.onOptionsItemSelected(item)
     }
@@ -68,18 +83,20 @@ class LibReferenceActivity : BaseActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         binding.root.apply {
-            fitsSystemWindows =
-                resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            setPadding(paddingStart, 0, paddingEnd, paddingBottom)
+            fitsSystemWindows = isOrientationLandscape
+            paddingTopCompat = 0
         }
+    }
+
+    override fun onBackPressed() {
+        finish()
     }
 
     private fun initView() {
         binding.apply {
             root.apply {
-                fitsSystemWindows =
-                    resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                setPadding(paddingStart, 0, paddingEnd, paddingBottom)
+                fitsSystemWindows = isOrientationLandscape
+                paddingTopCompat = 0
             }
 
             setAppBar(appbar, toolbar)
@@ -92,12 +109,8 @@ class LibReferenceActivity : BaseActivity() {
                     BorderView.OnBorderVisibilityChangedListener { top: Boolean, _: Boolean, _: Boolean, _: Boolean ->
                         appBar?.setRaised(!top)
                     }
-                setPadding(
-                    0,
-                    paddingTop + BarUtils.getStatusBarHeight(),
-                    0,
-                    UiUtils.getNavBarHeight()
-                )
+                paddingBottomCompat = UiUtils.getNavBarHeight(contentResolver)
+                addPaddingTop(BarUtils.getStatusBarHeight())
             }
             vfContainer.apply {
                 setInAnimation(
@@ -108,10 +121,24 @@ class LibReferenceActivity : BaseActivity() {
                     this@LibReferenceActivity,
                     R.anim.anim_fade_out
                 )
+                displayedChild = 0
+            }
+            lottie.apply {
+                imageAssetsFolder = "/"
+
+                val assetName = when(GlobalValues.season) {
+                    SPRING -> "lib_reference_spring.json"
+                    SUMMER -> "lib_reference_summer.json"
+                    AUTUMN -> "lib_reference_autumn.json"
+                    WINTER -> "lib_reference_winter.json"
+                    else -> "lib_reference_summer.json"
+                }
+
+                setAnimation(assetName)
             }
         }
 
-        viewModel.libRefList.observe(this, Observer {
+        viewModel.libRefList.observe(this, {
             adapter.setList(it)
             binding.vfContainer.displayedChild = 1
         })
@@ -131,7 +158,7 @@ class LibReferenceActivity : BaseActivity() {
                 this, view, view.transitionName
             )
 
-            if (GlobalValues.isShowEntryAnimation.value!!) {
+            if (GlobalValues.isShowEntryAnimation.valueUnsafe) {
                 startActivity(intent, options.toBundle())
             } else {
                 startActivity(intent)

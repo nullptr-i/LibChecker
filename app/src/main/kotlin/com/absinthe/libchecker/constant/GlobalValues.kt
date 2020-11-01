@@ -5,8 +5,8 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.lifecycle.MutableLiveData
 import com.absinthe.libchecker.BuildConfig
-import com.absinthe.libchecker.api.bean.Configuration
 import com.absinthe.libchecker.ui.fragment.applist.MODE_SORT_BY_SIZE
+import com.absinthe.libchecker.utils.AppUtils
 import com.blankj.utilcode.util.Utils
 
 const val SP_NAME = "${BuildConfig.APPLICATION_ID}_preferences"
@@ -19,16 +19,6 @@ object GlobalValues {
     private fun getPreferences(): SharedPreferences {
         return preferences
     }
-
-    var config = Configuration(
-        enableLibDetail = false,
-        enableComponentsDetail = false,
-        showLibName = false,
-        showTeamName = false,
-        showContributor = false,
-        showLibDescription = false,
-        showRelativeUrl = false
-    )
 
     var repo = getPreferences().getString(Constants.PREF_RULES_REPO, Constants.REPO_GITEE)
         ?: Constants.REPO_GITEE
@@ -60,5 +50,5 @@ object GlobalValues {
     val libReferenceThreshold: MutableLiveData<Int> =
         MutableLiveData(getPreferences().getInt(Constants.PREF_LIB_REF_THRESHOLD, 2))
 
-    val isObservingDBItems: MutableLiveData<Boolean> = MutableLiveData(true)
+    val season = AppUtils.getCurrentSeason()
 }

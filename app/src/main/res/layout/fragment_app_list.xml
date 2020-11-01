@@ -18,18 +18,19 @@
             android:orientation="vertical">
 
             <com.airbnb.lottie.LottieAnimationView
+                android:id="@+id/loading"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:lottie_autoPlay="true"
-                app:lottie_fileName="loading.json"
+                app:lottie_fileName="app_list_loading.json"
                 app:lottie_loop="true" />
 
             <TextView
                 android:id="@+id/tv_first_tip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="30dp"
-                android:text="@string/applist_first_tip"
+                android:layout_marginTop="-50dp"
+                android:text="@string/app_list_first_tip"
                 android:textAppearance="?attr/textAppearanceHeadline6" />
 
         </LinearLayout>
@@ -40,12 +41,15 @@
             android:layout_height="match_parent"
             android:clipToPadding="false"
             android:paddingTop="?actionBarSize"
-            android:scrollbarStyle="insideOverlay"
-            android:scrollbars="vertical"
             app:borderBottomStyle="never"
             app:borderTopDrawable="@null"
             app:borderTopStyle="whenTop"
-            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+            app:fastScrollEnabled="true"
+            android:scrollbarDefaultDelayBeforeFade="1250"
+            app:fastScrollHorizontalThumbDrawable="@drawable/thumb_drawable"
+            app:fastScrollHorizontalTrackDrawable="@android:color/transparent"
+            app:fastScrollVerticalThumbDrawable="@drawable/thumb_drawable"
+            app:fastScrollVerticalTrackDrawable="@android:color/transparent" />
 
     </ViewFlipper>
 

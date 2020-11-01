@@ -1,6 +1,8 @@
 package com.absinthe.libchecker.constant.librarymap
 
-import com.absinthe.libchecker.constant.*
+import com.absinthe.libchecker.annotation.*
+import com.absinthe.libchecker.constant.LibChip
+import java.util.regex.Pattern
 
 abstract class BaseMap {
 
@@ -19,6 +21,13 @@ abstract class BaseMap {
         }
     }
 
+    protected fun matchAllPatterns(content: String, vararg patterns: Pattern): Boolean {
+        for (pattern in patterns) {
+            if (pattern.matcher(content).matches()) { return true }
+        }
+        return false
+    }
+
     companion object {
         fun getMap(@LibType type: Int): BaseMap {
             return when (type) {
@@ -28,6 +37,7 @@ abstract class BaseMap {
                 RECEIVER -> ReceiverLibMap
                 PROVIDER -> ProviderLibMap
                 DEX -> DexLibMap
+                PERMISSION -> DexLibMap
                 else -> throw IllegalArgumentException("Illegal LibType.")
             }
         }

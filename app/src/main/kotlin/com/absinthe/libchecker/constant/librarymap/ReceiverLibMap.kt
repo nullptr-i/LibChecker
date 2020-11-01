@@ -41,6 +41,13 @@ object ReceiverLibMap : BaseMap() {
             )
         ),
         Pair(
+            "androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver",
+            LibChip(
+                R.drawable.ic_lib_jetpack,
+                "Jetpack Work Manager"
+            )
+        ),
+        Pair(
             "androidx.media.session.MediaButtonReceiver",
             LibChip(
                 R.drawable.ic_lib_jetpack,
@@ -197,36 +204,50 @@ object ReceiverLibMap : BaseMap() {
         Pair(
             "com.ss.android.downloadlib.core.download.DownloadReceiver",
             LibChip(
-                R.drawable.ic_lib_toutiao,
-                "头条广告 SDK"
+                R.drawable.ic_lib_bytedance,
+                "Pangle SDK"
+            )
+        ),
+        Pair(
+            "com.bytedance.embedapplog.collector.Collector",
+            LibChip(
+                R.drawable.ic_lib_bytedance,
+                "Pangle SDK"
             )
         ),
         Pair(
             "com.igexin.sdk.PushReceiver",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "个推"
             )
         ),
         Pair(
             "com.igexin.download.DownloadReceiver",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "个推"
             )
         ),
         Pair(
             "com.igexin.sdk.MiuiPushReceiver",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "MiPush(GeTui Proxy)"
             )
         ),
         Pair(
             "com.igexin.sdk.HmsPushSubReceiver",
             LibChip(
-                R.drawable.ic_question,
+                R.drawable.ic_sdk_placeholder,
                 "Huawei Push(GeTui Proxy)"
+            )
+        ),
+        Pair(
+            "com.igexin.sdk.FlymePushReceiver",
+            LibChip(
+                R.drawable.ic_sdk_placeholder,
+                "Meizu Push(GeTui Proxy)"
             )
         ),
         Pair(
@@ -267,8 +288,29 @@ object ReceiverLibMap : BaseMap() {
         Pair(
             "com.tencent.android.tpush.XGPushReceiver",
             LibChip(
-                R.drawable.ic_lib_tencent,
-                "信鸽推送"
+                R.drawable.ic_lib_tencent_cloud,
+                "腾讯移动推送"
+            )
+        ),
+        Pair(
+            "com.tencent.android.mipush.XMPushMessageReceiver",
+            LibChip(
+                R.drawable.ic_lib_tencent_cloud,
+                "MiPush(TPNS Proxy)"
+            )
+        ),
+        Pair(
+            "com.tencent.android.mzpush.MZPushMessageReceiver",
+            LibChip(
+                R.drawable.ic_lib_tencent_cloud,
+                "Meizu Push(TPNS Proxy)"
+            )
+        ),
+        Pair(
+            "com.tencent.android.vivopush.VivoPushMessageReceiver",
+            LibChip(
+                R.drawable.ic_lib_tencent_cloud,
+                "vivo Push(TPNS Proxy)"
             )
         ),
         Pair(
@@ -319,7 +361,28 @@ object ReceiverLibMap : BaseMap() {
                 R.drawable.ic_lib_evernote,
                 "Android-Job"
             )
-        )
+        ),
+        Pair(
+            "com.baidu.android.pushservice.PushServiceReceiver",
+            LibChip(
+                R.drawable.ic_lib_baidu,
+                "百度云推送"
+            )
+        ),
+        Pair(
+            "com.baidu.android.pushservice.RegistrationReceiver",
+            LibChip(
+                R.drawable.ic_lib_baidu,
+                "百度云推送"
+            )
+        ),
+        Pair(
+            "com.ksad.download.DownloadReceiver",
+            LibChip(
+                R.drawable.ic_lib_kuaishou,
+                "快手广告 SDK"
+            )
+        ),
     )
 
     override fun getMap(): HashMap<String, LibChip> {

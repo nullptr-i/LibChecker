@@ -25,7 +25,6 @@
                 android:id="@+id/header_content_layout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:animateLayoutChanges="true"
                 android:paddingHorizontal="@dimen/normal_padding"
                 android:paddingTop="?attr/actionBarSize"
                 android:paddingBottom="@dimen/normal_padding"
@@ -64,7 +63,7 @@
                     android:textColor="@color/textNormal"
                     android:textSize="14sp"
                     android:transitionName="package_name"
-                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintEnd_toEndOf="@id/tv_app_name"
                     app:layout_constraintStart_toStartOf="@id/tv_app_name"
                     app:layout_constraintTop_toBottomOf="@id/tv_app_name"
                     tools:text="com.absinthe.libchecker" />
@@ -77,7 +76,7 @@
                     android:textColor="@android:color/darker_gray"
                     android:textSize="12sp"
                     android:transitionName="version_name"
-                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintEnd_toEndOf="@id/tv_app_name"
                     app:layout_constraintStart_toStartOf="@id/tv_package_name"
                     app:layout_constraintTop_toBottomOf="@id/tv_package_name"
                     tools:text="1.2.0(120)" />
@@ -107,6 +106,36 @@
                         android:layout_height="wrap_content" />
 
                 </LinearLayout>
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/chipGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/normal_padding"
+                    android:clipToPadding="false"
+                    android:visibility="gone"
+                    app:chipSpacing="@dimen/normal_padding"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/tv_version"
+                    tools:visibility="visible">
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chip_split_apk"
+                        style="@style/App.LibChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/split_spk"
+                        app:chipIcon="@drawable/ic_split" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chip_kotlin_used"
+                        style="@style/App.LibChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/kotlin_used"
+                        app:chipIcon="@drawable/ic_kotlin_logo" />
+
+                </com.google.android.material.chip.ChipGroup>
 
             </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -160,10 +189,10 @@
                 android:layout_height="wrap_content"
                 android:text="@string/ref_category_cp" />
 
-<!--            <com.google.android.material.tabs.TabItem-->
-<!--                android:layout_width="wrap_content"-->
-<!--                android:layout_height="wrap_content"-->
-<!--                android:text="@string/ref_category_dex" />-->
+            <!--            <com.google.android.material.tabs.TabItem-->
+            <!--                android:layout_width="wrap_content"-->
+            <!--                android:layout_height="wrap_content"-->
+            <!--                android:text="@string/ref_category_dex" />-->
 
         </com.google.android.material.tabs.TabLayout>
 
@@ -173,11 +202,27 @@
             android:backgroundTint="?android:colorBackground"
             app:layout_constraintTop_toTopOf="parent">
 
-            <LinearLayout
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@null"
-                android:gravity="end">
+                android:layout_height="match_parent"
+                android:background="@null">
+
+                <TextView
+                    android:id="@+id/tv_items"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="@dimen/normal_padding"
+                    android:gravity="center"
+                    android:text="@string/items_count"
+                    android:textColor="@color/textNormal"
+                    app:layout_constraintStart_toStartOf="parent" />
+
+                <com.absinthe.libchecker.view.detail.TextSwitcherView
+                    android:id="@+id/ts_component_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:paddingVertical="8dp"
+                    app:layout_constraintStart_toEndOf="@id/tv_items" />
 
                 <ImageButton
                     android:id="@+id/ib_sort"
@@ -188,10 +233,13 @@
                     android:scaleType="center"
                     android:src="@drawable/ic_lib_sort"
                     android:tooltipText="@string/menu_sort"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
                     tools:ignore="HardcodedText"
                     tools:targetApi="o" />
 
-            </LinearLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
         </androidx.cardview.widget.CardView>
 

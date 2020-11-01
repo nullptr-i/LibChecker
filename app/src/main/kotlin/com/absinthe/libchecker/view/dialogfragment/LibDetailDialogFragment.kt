@@ -5,15 +5,13 @@ import android.os.Bundle
 import android.text.method.LinkMovementMethod
 import androidx.appcompat.app.AlertDialog
 import androidx.core.text.HtmlCompat
-import androidx.core.view.isGone
 import androidx.fragment.app.DialogFragment
-import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProvider
+import androidx.fragment.app.viewModels
+import coil.load
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.api.ApiManager
-import com.absinthe.libchecker.constant.GlobalValues
-import com.absinthe.libchecker.constant.LibType
-import com.absinthe.libchecker.constant.NATIVE
+import com.absinthe.libchecker.annotation.LibType
+import com.absinthe.libchecker.annotation.NATIVE
 import com.absinthe.libchecker.constant.librarymap.BaseMap
 import com.absinthe.libchecker.view.detail.LibDetailView
 import com.absinthe.libchecker.viewmodel.DetailViewModel
@@ -32,6 +30,7 @@ class LibDetailDialogFragment : DialogFragment() {
     private val libName by lazy { arguments?.getString(EXTRA_LIB_NAME) ?: "" }
     private val type by lazy { arguments?.getInt(EXTRA_LIB_TYPE) ?: NATIVE }
     private val regexName by lazy { arguments?.getString(EXTRA_REGEX_NAME) }
+    private val viewModel by viewModels<DetailViewModel>()
 
     private fun List<String>.toContributorsString(): String {
         return this.joinToString(separator = ", ")
@@ -41,9 +40,10 @@ class LibDetailDialogFragment : DialogFragment() {
         dialogView.binding.apply {
             vfContainer.displayedChild = VF_CHILD_LOADING
             tvLibName.text = libName
-            ivIcon.setImageResource(
-                BaseMap.getMap(type).getMap()[libName]?.iconRes ?: R.drawable.ic_logo
-            )
+            ivIcon.load(BaseMap.getMap(type).getMap()[libName]?.iconRes ?: R.drawable.ic_logo) {
+                crossfade(true)
+                placeholder(R.drawable.ic_logo)
+            }
             tvCreateIssue.apply {
                 isClickable = true
                 movementMethod = LinkMovementMethod.getInstance()
@@ -64,26 +64,17 @@ class LibDetailDialogFragment : DialogFragment() {
     override fun onStart() {
         super.onStart()
 
-        val viewModel = ViewModelProvider(this).get(DetailViewModel::class.java)
-        viewModel.detailBean.observe(requireActivity(), Observer {
+        viewModel.detailBean.observe(requireActivity(), {
             if (it != null) {
                 dialogView.binding.apply {
-                    GlobalValues.config.apply {
-                        llLabel.isGone = !showLibName
-                        llTeam.isGone = !showTeamName
-                        llContributor.isGone = !showContributor
-                        llDescription.isGone = !showLibDescription
-                        llRelativeUrl.isGone = !showRelativeUrl
-
-                        tvLabelName.text = it.label
-                        tvTeamName.text = it.team
-                        tvContributorName.text = it.contributors.toContributorsString()
-                        tvDescriptionName.text = it.description
-                        tvRelativeName.apply {
-                            isClickable = true
-                            movementMethod = LinkMovementMethod.getInstance()
-                            text = HtmlCompat.fromHtml("<a href='${it.relativeUrl}'> ${it.relativeUrl} </a>", HtmlCompat.FROM_HTML_MODE_LEGACY)
-                        }
+                    tvLabelName.text = it.label
+                    tvTeamName.text = it.team
+                    tvContributorName.text = it.contributors.toContributorsString()
+                    tvDescriptionName.text = it.description
+                    tvRelativeName.apply {
+                        isClickable = true
+                        movementMethod = LinkMovementMethod.getInstance()
+                        text = HtmlCompat.fromHtml("<a href='${it.relativeUrl}'> ${it.relativeUrl} </a>", HtmlCompat.FROM_HTML_MODE_LEGACY)
                     }
 
                     vfContainer.displayedChild = VF_CHILD_DETAIL

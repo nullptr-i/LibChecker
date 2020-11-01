@@ -8,18 +8,23 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.appcompat.app.AlertDialog
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.net.toUri
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.recyclerview.widget.RecyclerView
 import com.absinthe.libchecker.BuildConfig
 import com.absinthe.libchecker.R
 import com.absinthe.libchecker.constant.Constants
 import com.absinthe.libchecker.constant.GlobalValues
 import com.absinthe.libchecker.constant.URLManager
+import com.absinthe.libchecker.database.AppItemRepository
 import com.absinthe.libchecker.ui.detail.ApkDetailActivity
+import com.absinthe.libchecker.ui.main.IListContainer
 import com.absinthe.libchecker.ui.main.MainActivity
-import com.absinthe.libchecker.utils.AppUtils
 import com.absinthe.libchecker.view.dialogfragment.LibThresholdDialogFragment
+import com.absinthe.libchecker.viewmodel.AppViewModel
 import com.microsoft.appcenter.analytics.Analytics
 import com.microsoft.appcenter.analytics.EventProperties
 import moe.shizuku.preference.ListPreference
@@ -29,7 +34,7 @@ import rikka.material.widget.BorderRecyclerView
 import rikka.material.widget.BorderView
 import rikka.recyclerview.fixEdgeEffect
 
-class SettingsFragment : PreferenceFragment() {
+class SettingsFragment : PreferenceFragment(), IListController {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.settings, rootKey)
@@ -67,6 +72,7 @@ class SettingsFragment : PreferenceFragment() {
         (findPreference(Constants.PREF_COLORFUL_ICON) as SwitchPreference).apply {
             setOnPreferenceChangeListener { _, newValue ->
                 GlobalValues.isColorfulIcon.value = newValue as Boolean
+                AppItemRepository.allApplicationInfoItems.value = AppItemRepository.allApplicationInfoItems.value
                 Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_COLORFUL_ICON", newValue))
                 true
             }
@@ -74,7 +80,6 @@ class SettingsFragment : PreferenceFragment() {
         (findPreference(Constants.PREF_RULES_REPO) as ListPreference).apply {
             setOnPreferenceChangeListener { _, newValue ->
                 GlobalValues.repo = newValue as String
-                AppUtils.requestConfiguration()
                 Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_RULES_REPO", newValue))
                 true
             }
@@ -82,6 +87,22 @@ class SettingsFragment : PreferenceFragment() {
         findPreference(Constants.PREF_LIB_REF_THRESHOLD)?.apply {
             setOnPreferenceClickListener {
                 LibThresholdDialogFragment().show(requireActivity().supportFragmentManager, tag)
+                true
+            }
+        }
+        findPreference(Constants.PREF_RELOAD_APPS)?.apply {
+            setOnPreferenceClickListener {
+                AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.dialog_title_reload_apps)
+                    .setMessage(R.string.dialog_subtitle_reload_apps)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        val viewModel by activityViewModels<AppViewModel>()
+                        viewModel.reloadAppsFlag.value = true
+                        Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_RELOAD_APPS", "Ok"))
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .create()
+                    .show()
                 true
             }
         }
@@ -113,11 +134,30 @@ class SettingsFragment : PreferenceFragment() {
                 } else {
                     URLManager.MARKET_PAGE
                 }
-                startActivity(Intent.parseUri(marketUrl, 0))
-                Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_RATE", "Clicked"))
+
+                try {
+                    startActivity(Intent.parseUri(marketUrl, 0))
+                    Analytics.trackEvent(Constants.Event.SETTINGS, EventProperties().set("PREF_RATE", "Clicked"))
+                } catch (e: ActivityNotFoundException) {
+                    e.printStackTrace()
+                }
                 true
             }
         }
+        findPreference("tg")?.apply {
+            setOnPreferenceClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW, "https://t.me/libcheckerr".toUri()).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                })
+                true
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        ((requireActivity() as IListContainer).controller as? Fragment)?.setHasOptionsMenu(false)
+        (requireActivity() as IListContainer).controller = this
     }
 
     override fun onCreateItemDecoration(): DividerDecoration? {
@@ -127,6 +167,8 @@ class SettingsFragment : PreferenceFragment() {
     override fun onCreateRecyclerView(inflater: LayoutInflater, parent: ViewGroup, savedInstanceState: Bundle?): RecyclerView {
         val recyclerView = super.onCreateRecyclerView(inflater, parent, savedInstanceState) as BorderRecyclerView
         recyclerView.fixEdgeEffect()
+        recyclerView.overScrollMode = RecyclerView.OVER_SCROLL_NEVER
+        recyclerView.scrollBarStyle = RecyclerView.SCROLL_AXIS_NONE
 
         val lp = recyclerView.layoutParams
         if (lp is FrameLayout.LayoutParams) {
@@ -136,5 +178,9 @@ class SettingsFragment : PreferenceFragment() {
 
         recyclerView.borderViewDelegate.borderVisibilityChangedListener = BorderView.OnBorderVisibilityChangedListener { top: Boolean, _: Boolean, _: Boolean, _: Boolean -> (activity as MainActivity?)?.appBar?.setRaised(!top) }
         return recyclerView
+    }
+
+    override fun onReturnTop() {
+        //Do nothing
     }
 }
